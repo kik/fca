@@ -61,18 +61,33 @@ write_ppu_reg:
 @@@ 
 
 write_2000:	
-	mov	r1, r0, lsr #2
+	mov	r0, r0, ror #2
+	
+	eor	r2, r0, REG_P_REST, lsr #8
 	bic	REG_P_REST, REG_P_REST, #P_REST_2000
-	orr	REG_P_REST, REG_P_REST, r1, lsl #8
+	orr	REG_P_REST, REG_P_REST, r0, lsl #8
 
 	@@ t:00001100 00000000=d:00000011
 	ldrh	r1, loopy_t
 	bic	r1, r1, #0x0C00
-	and	r2, r0, #3
-	orr	r1, r1, r2, lsl #10
+	orr	r1, r1, r0, lsr #20
 	strh	r1, loopy_t
 
-	mov	pc, lr
+	@@ SPRの設定が変更されたか？
+	tst	r2, #0x0C
+	moveq	pc, lr
+
+	tst	r2, #0x08
+	bne	1f
+	@@ SPRアドレスのみ更新
+	tst	REG_P_REST, #P_REST_SPR_ADR
+	bne	set_spr_adr_1
+	b	set_spr_adr_0
+1:	
+	@@ SPRサイズが更新された
+	tst	REG_P_REST, #P_REST_SPR_SZ
+	bne	set_spr_8x16
+	b	set_spr_8x8
 
 @@@ 
 @@@ $2001 に書く
@@ -103,39 +118,6 @@ read_2002:
 @@@ 
 write_2002:	
 	mov	pc, lr
-
-
-
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@ 
-@@@ スプライトの管理レジスタ
-@@@ 
-
-@@@ 
-@@@ $2003 に書く
-@@@ 
-
-write_2003:	
-#if 0
-	strb	r0, ppu_reg_2003
-#endif
-	mov	pc, lr
-
-@@@ 
-@@@ $2004 に書く
-@@@ 
-
-write_2004:	
-#if 0
-	ldr	r2, =sprite_ram
-	ldrb	r1, ppu_reg_2003
-	strb	r0, [r2, r1]
-	add	r1, r1, #1
-	strb	r1, ppu_reg_2003
-#endif
-	mov	pc, lr
-
 
 
 
@@ -220,7 +202,8 @@ write_2006:
 @@@ 
 
 read_2007_buffer:
-	.long	0
+	.byte	0
+	ALIGN
 
 read_2007:	
 	ldrh	r1, loopy_v
@@ -234,7 +217,7 @@ read_2007:
 	cmp	r1, #0x3F00
 	bcs	read_palette
 
-	ldr	r0, read_2007_buffer	
+	adr	r3, read_2007_buffer
 
 	cmp	r1, #0x2000
 	bcc	read_tile
@@ -303,6 +286,8 @@ ppu_start_frame:
 	@@ BGを描く場合は BG_0 を有効に
 	tst	REG_P_REST, #P_REST_DRAW_BG
 	orrne	r0, r0, #0x0100
+	tst	REG_P_REST, #P_REST_DRAW_SPR
+	orrne	r0, r0, #0x1000
 
 	tst	REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
 	@@ BGもSPRも描かない場合は画面をブランクにする
@@ -502,6 +487,30 @@ vbl_handler:
 	orr	r1, r1, #0x8000 | 0x2000 | 0x0400 | 0x0200
 	strh	r1, [r0, #0xBA]	
 #endif
+	@@ 次にスプライトをDMAで転送する
+	@@ DMA stop
+	mov	r1, #0
+	strh	r1, [r0, #0xC6]
+
+	@@ DMA SRC ← sprite data
+	adr	r1, gba_sprite
+	str	r1, [r0, #0xBC]
+
+	@@ DMA DST ← sprite ram
+	mov	r1, #0x07000000
+	str	r1, [r0, #0xC0]
+
+	@@ DMA Count ← 1
+	mov	r1, #64 * 2
+	strh	r1, [r0, #0xC4]
+
+	@@ DMA Ctrl
+	@@ DST:	inc
+	@@ SRC:	inc
+	@@ Width: word
+	mov	r1, #0x8400
+	strh	r1, [r0, #0xC6]	
+
 	mov	pc, lr
 
 @@@ 
@@ -530,6 +539,281 @@ skip_table:
 #undef P
 
 	ALIGN
+
+
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ スプライトの変換
+@@@ 
+@@@ スプライトも縦方向に縮小しなければならない。
+@@@ スプライトRAMは読めないので元を保存する必要はない
+@@@ ただし，SPR #0 はヒットフラグで使うので必要
+@@@ 
+@@@ NES
+@@@ 0
+@@@ 76543210
+@@@ ++++++++---Y - 1
+@@@ 
+@@@ 1
+@@@ 76543210
+@@@ ++++++++---Tile #
+@@@ 
+@@@ 2
+@@@ 76543210
+@@@ ||||||++---Palette
+@@@ |||+++---Unused
+@@@ ||+---Priority (0=Front, 1=Behind)
+@@@ |+---H flip
+@@@ +---V flip
+@@@ 
+@@@ 3
+@@@ 76543210
+@@@ ++++++++---X
+@@@ 
+@@@ GBA
+@@@ 
+@@@ 0
+@@@ FEDCBA9876543210
+@@@ ||||||||++++++++---Y
+@@@ |||||||+---R	<= 1
+@@@ ||||||+---SD	<= 0
+@@@ ||||++---Mode	<= 0
+@@@ |||+---M		<= 0
+@@@ ||+---C		<= 0
+@@@ ++---Shape		<= 00 8x8, 01 8x16
+@@@ 
+@@@ 1
+@@@ FEDCBA9876543210
+@@@ |||||||+++++++++---X
+@@@ ||||+++---Rot	<= 0
+@@@ |||+---H flip	<= NES HF
+@@@ ||+---V flip	<= NES VF
+@@@ ++---Size		<= 0
+@@@ 
+@@@ 2
+@@@ FEDCBA9876543210
+@@@ ||||||++++++++++---Tile # 注意!!!
+@@@ ||||++---Priority
+@@@ ++++---Palette #
+@@@ 
+@@@ 
+@@@ Tile # は面倒な変換をしなければならない
+@@@ 
+@@@ SPR_SZ	SPR_ADR		9876543210
+@@@ 8x8		0		||++++++++---NES Tile#
+@@@				++---00
+@@@ 8x8		1		9876543210
+@@@				||++++++++---NES Tile#
+@@@				++---01
+@@@ 8x16	*		9876543210
+@@@				|||||||||+---0
+@@@				||+++++++---NES Tile# & 0xFE
+@@@				++---00(# & 1 == 0), 01(# & 1 == 1)
+
+
+@@@ 
+@@@ スプライトDMA
+@@@ 
+write_4014:
+	stmfd	sp!, {r4, r5, lr}	
+	bl	spr_dma_adr
+	@@ r0 = DMA src
+	adr	r1, gba_sprite
+	mov	r2, #64
+1:	
+	ldr	r3, [r0], #4
+	@@ Y
+	strb	r3, [r1], #8
+
+	ldrh	r4, [r1, #-6]
+	and	r4, r4, #0xCE00
+	orr	r4, r4, r3, lsr #24
+	and	r5, r3, #0xC0 << 16
+	orr	r4, r4, r5, lsr #10
+	strh	r4, [r1, #-6]
+
+	@@ test priority
+	tst	r3, #0x20 << 16
+	moveq	r4, #0
+	movne	r4, #0x0400
+
+	and	r5, r3, #0x03 << 16
+	orr	r4, r4, r5, lsr #4
+
+	tst	REG_P_REST, #P_REST_SPR_ADR
+	moveq	r5, #0
+	movne	r5, #0x100
+	tst	REG_P_REST, #P_REST_SPR_SZ
+	movne	r5, r3, lsr #16
+	bicne	r3, r3, #0x01 << 24
+	and	r5, r5, #0x100
+	orr	r4, r4, r5
+	and	r3, r3, #0xFF00
+	orr	r4, r4, r3, lsr #8
+	strh	r4, [r1, #-4]
+
+	subs	r2, r2, #1
+	bne	1b
+	ldmfd	sp!, {r4, r5, pc}
+
+gba_sprite:	
+	.fill	64, 8, 0
+
+	ALIGN
+@@@ 
+@@@ $2003 に書く
+@@@ 
+
+ppu_reg_2003:	.byte	0
+	
+	ALIGN
+
+write_2003:	
+	strb	r0, ppu_reg_2003
+	mov	pc, lr
+
+@@@ 
+@@@ $2004 に書く
+@@@ 
+
+write_2004:
+	ldrb	r1, ppu_reg_2003
+	add	r2, r1, #1
+	strb	r2, ppu_reg_2003
+
+	mov	r2, r1, ror #2
+	adr	r3, gba_sprite
+	add	r3, r3, r2, lsl #3
+	ldr	pc, [pc, r2, lsr #28]
+	nop
+	.long	write_spr_0
+	.long	write_spr_1
+	.long	write_spr_2
+	.long	write_spr_3
+
+write_spr_0:
+	@@ Spr Y
+	@@ TODO: 変換すること
+	strb	r0, [r3]
+	mov	pc, lr
+
+write_spr_1:	
+	@@ Tile #
+	tst	REG_P_REST, #P_REST_SPR_SZ
+	streqb	r0, [r3, #4]
+	moveq	pc, lr
+
+	@@ 8x16
+	ldrh	r1, [r3, #4]
+	and	r1, r1, #0xFC00
+	movs	r0, r0, lsr #1
+	orrcs	r1, r1, #0x100
+	orr	r1, r1, r0, lsl #1
+
+	strh	r1, [r3, #4]
+	mov	pc, lr
+
+write_spr_2:
+	@@ Palette, Prio
+	ldrb	r1, [r3, #5]
+	bic	r1, r1, #0xFC
+	orr	r1, r1, r0, lsl #4
+	tst	r0, #0x20
+	orrne	r1, r1, #0x04
+	strb	r1, [r3, #5]
+	@@ H flip, V flip
+	ldrb	r1, [r3, #3]
+	bic	r1, r1, #0x30
+	and	r0, r0, #0xC0
+	orr	r1, r1, r0, lsr #2
+	strb	r1, [r3, #3]
+	mov	pc, lr
+
+write_spr_3:	
+	@@ Spr X
+	strb	r0, [r3, #2]
+	mov	pc, lr
+
+@@@
+@@@ スプライトのサイズが8x16から8x8に変更された
+@@@ 
+set_spr_8x8:	
+	adr	r0, gba_sprite
+	mov	r2, #64
+1:	
+	ldrh	r1, [r0]
+	bic	r1, r1, #0xC000
+	strh	r1, [r0], #4
+	ldrh	r1, [r0]
+	tst	r1, #0x0100
+	orrne	r1, r1, #1
+	tst	REG_P_REST, #P_REST_SPR_ADR
+	biceq	r1, r1, #0x0100
+	orrne	r1, r1, #0x0100
+	strh	r1, [r0], #4
+
+	subs	r2, r2, #1
+	bne	1b
+	mov	pc, lr
+
+@@@ 
+@@@ スプライトのサイズが8x8から8x16に変更された
+@@@ 
+set_spr_8x16:	
+	adr	r0, gba_sprite
+	mov	r2, #64
+1:	
+	ldrh	r1, [r0]
+	orr	r1, r1, #0x4000
+	strh	r1, [r0], #4
+	ldrh	r1, [r0]
+	tst	r1, #0x0001
+	biceq	r1, r1, #0x0100
+	orrne	r1, r1, #0x0100
+	bic	r1, r1, #1
+	strh	r1, [r0], #4
+
+	subs	r2, r2, #1
+	bne	1b
+	mov	pc, lr
+
+@@@ 
+@@@ スプライトのアドレスが0に変更された
+@@@ 
+set_spr_adr_0:	
+	adr	r0, gba_sprite
+	mov	r2, #32
+1:	
+	ldrh	r1, [r0, #4]!
+	bic	r1, r1, #0x0100
+	strh	r1, [r0], #4
+
+	ldrh	r1, [r0, #4]!
+	bic	r1, r1, #0x0100
+	strh	r1, [r0], #4
+
+	subs	r2, r2, #1
+	bne	1b
+	mov	pc, lr
+
+
+set_spr_adr_1:	
+	adr	r0, gba_sprite
+	mov	r2, #32
+1:	
+	ldrh	r1, [r0, #4]!
+	orr	r1, r1, #0x0100
+	strh	r1, [r0], #4
+
+	ldrh	r1, [r0, #4]!
+	orr	r1, r1, #0x0100
+	strh	r1, [r0], #4
+
+	subs	r2, r2, #1
+	bne	1b
+	mov	pc, lr
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -568,13 +852,14 @@ tile_map:
 @@@ $2007経由でタイルを読む
 @@@ 
 @@@ r1	=> アドレス
-@@@ r0	<= 結果
+@@@ r0	<= *r3 = read_2007_buffer
+@@@ *r3 <= 結果
 read_tile:
 	mov	r2, r1, lsr #10
-	adr	r3, tile_map
-	ldr	r3, [r3, r2, lsl #2]
-	ldrb	r1, [r3, r1]
-	strb	r1, read_2007_buffer
+	adr	r0, tile_map
+	ldr	r0, [r0, r2, lsl #2]
+	ldrb	r0, [r0, r1]
+	swpb	r0, r0, [r3]
 	mov	pc, lr
 
 @@@ 
@@ -857,14 +1142,15 @@ map_table_map:
 @@@ 
 @@@ $2007経由でマップを読む
 @@@ 
-@@@ r1			=> アドレス(000-3C0)
-@@@ r2			=> マップ番号(0-3)
-@@@ read_2007_buffer	<= 結果
+@@@ r1	=> アドレス(000-3C0)
+@@@ r2	=> マップ番号(0-3)
+@@@ r0	<= *r3 = read_2007_buffer
+@@@ *r3	<= 結果
 read_map:	
-	adr	r3, map_table_map
-	ldr	r3, [r3, r2, lsl #2]
-	ldrb	r1, [r3, r1, lsl #1]
-	strb	r1, read_2007_buffer
+	adr	r0, map_table_map
+	ldr	r0, [r0, r2, lsl #2]
+	ldrb	r0, [r0, r1, lsl #1]
+	swpb	r0, r0, [r3]
 	mov	pc, lr
 
 @@@ 
@@ -911,15 +1197,16 @@ write_map:
 @@@ 
 @@@ $2007経由で属性を読む
 @@@ 
-@@@ r1			=> アドレス(3C0-400)
-@@@ r2			=> マップ番号(0-3)
-@@@ read_2007_buffer	<= 結果
+@@@ r1	=> アドレス(3C0-400)
+@@@ r2	=> マップ番号(0-3)
+@@@ r0	<= *r3 = read_2007_buffer
+@@@ *r3	<= 結果
 read_attr:	
 	and	r1, r1, #0x3F
-	adr	r3, attr_table
-	ldr	r3, [r3, r2, lsl #2]
-	ldrb	r3, [r3, r1]
-	strb	r3, read_2007_buffer
+	adr	r0, attr_table
+	ldr	r0, [r0, r2, lsl #2]
+	ldrb	r0, [r0, r1]
+	swpb	r0, r0, [r3]
 	mov	pc, lr
 
 
@@ -1054,73 +1341,28 @@ init_ppu:
 	mov	pc, lr
 
 	.globl	ppu_start_vbl
-	.globl	ppu_end_vbl
 ppu_start_vbl:	
 	orr	REG_P_REST, REG_P_REST, #P_REST_IN_VBL
 	@orr	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT	
 	mov	pc, lr
 
+	.globl	ppu_end_vbl
 ppu_end_vbl:	
 	bic	REG_P_REST, REG_P_REST, #(P_REST_IN_VBL | P_REST_SPR_HIT)
 	mov	pc, lr
 
-#if 0
-scr:	.long	0
-
-	.globl	vbl_handler
-vbl_handler:	
-	mov	r0, #0x04000000
-
-	mov	r1, #0x8
-	strh	r1, [r0, #0x12]
-
-	@@ DMA stop
-	mov	r1, #0
-	strh	r1, [r0, #0xBA]
-
-	adr	r1, scroll_test + 2
-	@@ DMA Ctrl
-	strh	r1, [r0, #0xBA]	
-	@@ DMA SRC
-	str	r1, [r0, #0xB0]
-	@@ BG0_Y
-	add	r1, r0, #0x12	
-	@@ DMA DST
-	str	r1, [r0, #0xB4]
-	mov	r1, #1
-	@@ DMA Count
-	strh	r1, [r0, #0xB8]
-	@@ DST:	fixed
-	@@ SRC:	inc
-	mov	r1, #0x40 @| 0x180
-	@@ Width: hword
-	@@ Repeat
-	@@ HBlank
-	orr	r1, r1, #0x8000 | 0x2000 | 0x0200
-	@@ DMA Ctrl
-	strh	r1, [r0, #0xBA]	
-	mov	pc, lr
-
-scroll_test:	
-	@@ skip 0
-#define P(n) n, n, n, n + 1, n + 1, n + 1
-	.short	P( 8), P(10), P(12), P(14)@ 1-4
-	.short	P(16), P(18), P(20), P(22)@ 5-8
-	.short	P(24), P(26), P(28), P(30)@ 9-12
-	.short	P(32), P(34), P(36), P(38)@ 13-16
-	.short	P(40), P(42), P(44), P(46)@ 17-20
-	.short	P(48), P(50), P(52), P(54)@ 21-24
-	.short	P(56), P(58), P(60), P(62)@ 25-28
-	.short	P(64), P(66), P(68), P(70)@ 29-32
-#endif
 
 	.globl	read_high_reg
 	.globl	read_save_ram
-	.globl	write_high_reg
 	.globl	write_save_ram
 read_high_reg:	
 read_save_ram:	
-write_high_reg:	
 write_save_ram:	
 	mov	pc, lr
 
+	.globl	write_high_reg
+write_high_reg:	
+	bic	r1, REG_ADDR, #0x4000
+	teq	r1, #0x14
+	beq	write_4014
+	mov	pc, lr

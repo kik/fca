@@ -1756,22 +1756,19 @@ read_rom_byte:
 write_rom_byte:	
 	b	write_rom_byte
 
-#if 0
-@@@ 
-@@@ ミラーリングを考慮しなければならない
-@@@ 
-read_ram_byte:	
-	bic	r0, REG_ADDR, #0x1800
-	add	r0, r0, #NES_RAM
-	ldrb	r0, [r0]
-	mov	pc, lr
 
-write_ram_byte:	
-	bic	r1, REG_ADDR, #0x1800
-	add	r1, r1, #NES_RAM
-	strb	r0, [r1]
+@@@ 
+@@@ スプライトのDMAのアドレスを変換する
+@@@ 
+	.globl	spr_dma_adr
+
+spr_dma_adr:	
+	movs	r1, r0, lsr #5
+	biceq	r0, r0, #0x18
+	adr	r2, memory_map
+	ldr	r2, [r2, r1, lsl #2]
+	add	r0, r2, r0, lsl #8
 	mov	pc, lr
-#endif
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@	
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@	

@@ -240,7 +240,7 @@ write_2007:
 	addeq	r3, r1, #1
 	addne	r3, r1, #32
 	strh	r3, loopy_v
-	
+
 	bic	r1, r1, #0xC000
 
 	cmp	r1, #0x3F00
@@ -275,8 +275,6 @@ write_2007:
 @@@ 
 @@@ 描画の開始
 @@@ 
-@@@ Z	<= 画面を描画する
-@@@ NZ	<= 画面を描画しない
 @@@ 
 	.globl	ppu_start_frame
 ppu_start_frame:
@@ -315,6 +313,7 @@ ppu_start_frame:
 	adr	r1, skip_table
 	str	r1, nes_line
 
+	b	validate_tile
 	mov	pc, lr
 
 @@@ 
@@ -844,7 +843,9 @@ init_gba_spr:
 	subs	r1, r1, #1
 	bne	1b
 #if 0
-
+	@@ 
+	@@ スプライトの縮小はなんか見た目がよくないので
+	@@ はずしておく
 	adr	r0, gba_sprite
 	mov	r1, #0x0100	@ X Scale
 	mov	r2, #0x00C0	@ Y Scale
@@ -904,7 +905,14 @@ init_gba_spr:
 @@@ 0601_2000-0601_4000
 @@@ に置く
 
-
+@@@ 
+@@@ タイル用のRAM
+@@@ FF3などの一部のゲームはCHR-ROMを持たず，かわりにこれを使う
+@@@ 
+	SECTION_SLOW
+	ALIGN
+tile_ram:
+	.fill	0x2000, 1, 0
 
 	SECTION_FAST
 	ALIGN
@@ -914,8 +922,60 @@ init_gba_spr:
 @@@ ひとつは0x400つまり64個
 @@@ 
 tile_map:
+	.long	tile_ram, tile_ram, tile_ram, tile_ram
+	.long	tile_ram, tile_ram, tile_ram, tile_ram
+
+@@@ 
+@@@ Mapperによってタイルが変更された場合は
+@@@ フレームごとに変更を確認する。前回のフレームで設定されていた
+@@@ メモリマップをここに保存しておく
+@@@ 
+@@@ DQ1などはCHR-ROMにもデータをもっていて，VBLの間にそれを読もうとする
+@@@ そこて，CHR-ROMの変更はフレームごとにチェックすることで，
+@@@ 画面がちらつくのを防ぐ
+@@@ 
+tile_map_old:	
 	.long	0, 0, 0, 0
 	.long	0, 0, 0, 0
+
+.macro	VALIDATE_LO	n
+	ldr	r0, tile_map     + \n * 4
+	ldr	r5, tile_map_old + \n * 4
+	teq	r0, r5
+	addeq	r1, r1, #0x800
+	strne	r0, tile_map_old + \n * 4
+	addne	r0, r0, #0x400 * \n
+	addne	r2, r1, #0x10000
+	blne	trans_tile_64
+.endm
+
+.macro	VALIDATE_HI	n
+	ldr	r0, tile_map     + \n * 4
+	ldr	r5, tile_map_old + \n * 4
+	teq	r0, r5
+	addeq	r1, r1, #0x800
+	strne	r0, tile_map_old + \n * 4
+	addne	r0, r0, #0x400 * \n
+	addne	r2, r1, #0xE000
+	blne	trans_tile_64
+.endm
+
+@@@ 
+@@@ タイルのデータを有効にする
+@@@ 
+validate_tile:
+	stmfd	sp!, {r4-r10, lr}
+	mov	r1, #0x06000000
+	VALIDATE_LO	0
+	VALIDATE_LO	1
+	VALIDATE_LO	2
+	VALIDATE_LO	3
+	add	r1, r1, #0x2000
+	VALIDATE_HI	4
+	VALIDATE_HI	5
+	VALIDATE_HI	6
+	VALIDATE_HI	7
+	ldmfd	sp!, {r4-r10, pc}
 
 
 @@@ 
@@ -933,58 +993,30 @@ read_tile:
 	mov	pc, lr
 
 @@@ 
-@@@ $2007経由でタイルに書くのを実装しないといけない
+@@@ $2007経由でタイルに書く
 @@@ 
-write_tile:	mov	pc, lr
+write_tile:
+	mov	r2, r1, lsr #10
+	adr	r3, tile_map
+	ldr	r3, [r3, r2, lsl #2]
+	strb	r0, [r3, r1]
+	mov	r0, #0
+	adr	r3, tile_map_old
+	str	r0, [r3, r2, lsl #2]
+	mov	pc, lr
 
-
-
-.macro	SET_TILE_BANK_LO	n
-	ldr	r1, tile_map + (4 * \n)
-	teq	r1, r11
-	beq	1f
-
-	str	r11, tile_map + (4 * \n)
-	add	r0, r11, #(0x400 * \n)
-	mov	r1, #0x06000000
-	add	r1, r1, #(0x800 * \n)
-	add	r2, r1, #0x10000
-	bl	trans_tile_64
-1:	
-.endm
-
-.macro	SET_TILE_BANK_HI	n
-	ldr	r1, tile_map + (4 * \n)
-	teq	r1, r11
-	beq	1f
-
-	str	r11, tile_map + (4 * \n)
-	add	r0, r11, #(0x400 * \n)
-	mov	r1, #0x06000000
-	add	r1, r1, #(0x800 * \n)
-	add	r2, r1, #0x10000
-	add	r1, r1, #0x2000
-	bl	trans_tile_64
-1:	
-.endm
 
 	.globl	set_vram_bank_0to7
 set_vram_bank_0to7:	
-	stmfd	sp!, {r4-r11, lr}
-	mov	r11, r0
-
-	SET_TILE_BANK_LO	0
-	SET_TILE_BANK_LO	1
-	SET_TILE_BANK_LO	2
-	SET_TILE_BANK_LO	3
-	SET_TILE_BANK_HI	4
-	SET_TILE_BANK_HI	5
-	SET_TILE_BANK_HI	6
-	SET_TILE_BANK_HI	7
-
-	ldmfd	sp!, {r4-r11, pc}
-
-	.globl	translate_tiles
+	str	r0, tile_map + 4 * 0
+	str	r0, tile_map + 4 * 1
+	str	r0, tile_map + 4 * 2
+	str	r0, tile_map + 4 * 3
+	str	r0, tile_map + 4 * 4
+	str	r0, tile_map + 4 * 5
+	str	r0, tile_map + 4 * 6
+	str	r0, tile_map + 4 * 7
+	mov	pc, lr
 
 
 @@@ 
@@ -1030,7 +1062,7 @@ trans_tile_64:
 
 	subs	r10, r10, #1
 	bne	1b
-	
+
 	mov	pc, lr
 
 
@@ -1425,12 +1457,6 @@ ppu_end_vbl:
 	mov	pc, lr
 
 
-	.globl	read_save_ram
-	.globl	write_save_ram
-read_save_ram:	
-write_save_ram:	
-	mov	pc, lr
-
 	.globl	read_high_reg
 read_high_reg:	
 	bic	r1, REG_ADDR, #0x4000
@@ -1448,3 +1474,22 @@ write_high_reg:
 	teq	r1, #0x16
 	beq	write_4016
 	mov	pc, lr
+
+
+	.globl	read_save_ram
+	.globl	write_save_ram
+read_save_ram:	
+	ldr	r1, = save_ram - 0x6000
+	ldrb	r0, [r1, REG_ADDR]
+	mov	pc, lr
+
+write_save_ram:	
+	ldr	r1, = save_ram - 0x6000
+	strb	r0, [r1, REG_ADDR]
+	mov	pc, lr
+
+	.pool
+
+	SECTION_SLOW
+	ALIGN
+save_ram:	.fill	0x2000, 1, 0

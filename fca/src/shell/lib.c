@@ -1,6 +1,14 @@
 #include "gba.h"
 #include "lib.h"
 
+char *
+strchr(char *p, char c)
+{
+  while (*p && *p != c)
+    p++;
+  return *p? p: 0;
+}
+
 int
 strcmp(const char *p, const char *q)
 {

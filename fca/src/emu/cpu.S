@@ -183,7 +183,7 @@
 	adr	lr, 9999f
 	@@ 0でない時はジャンプする。
 	@@ ちょっと工夫して1クロック減らす
-	ldrne	pc, [lr, -r1, lsl #2]
+	ldrne	pc, [lr, -r3, lsl #2]
 	@@ RAMからロード
 	bic	REG_ADDR, REG_ADDR, #0x1800
 	add	REG_ADDR, REG_ADDR, #NES_RAM
@@ -797,6 +797,7 @@ op8C:	@ STY $nnnn
 @@@ **--
 .macro	OP_INC
 	add	r0, r0, #1
+	and	r0, r0, #0xFF
 	mov	REG_NZ, r0, lsl #24
 	mov	REG_NZ, REG_NZ, asr #24
 .endm
@@ -810,12 +811,13 @@ op8C:	@ STY $nnnn
 
 .macro	OP_DEC
 	sub	r0, r0, #1
+	and	r0, r0, #0xFF
 	mov	REG_NZ, r0, lsl #24
 	mov	REG_NZ, REG_NZ, asr #24
 .endm
 
 .macro	OP_DEXY	reg
-	subs	\reg, \reg, #1	
+	sub	\reg, \reg, #1	
 	and	\reg, \reg, #0xFF
 	mov	REG_NZ, \reg, lsl #24
 	mov	REG_NZ, REG_NZ, asr #24
@@ -1181,7 +1183,6 @@ opCD:	@ CMP $nnnn
 	ABS_ADDR
 	READ_1;	OP_CMP;	CYCLE_NEXT	4
 	READ_2;	OP_CMP;	CYCLE_NEXT	4
-	CYCLE_NEXT	4
 
 opDD:	@ CMP $nnnn, X
 	ABSX_ADDR
@@ -1524,6 +1525,29 @@ op70:	@ BVS $nn
 	BRANCH_NE
 	CYCLE_NEXT	2
 
+trace_jump:
+	stmfd	sp!, {lr}
+	ldr	r1, =0xFF45
+	teq	r1, r0
+	beq	2f
+	ldr	r1, =0x8025
+	teq	r1, r0
+	@beq	2f
+	@cmp	r0, #0x2000
+	@bcs	2f
+	bleq	emu_break
+	ldr	r1, pc_bank
+	sub	r1, REG_PC, r1
+	mov	r2, r0
+	adr	r0, 1f
+	bl	emu_printf
+2:	
+	ldmfd	sp!, {r1}
+	ldmfd	sp!, {r0, lr}
+	mov	pc, r1
+1:	.string "jump %x=>%x\n"
+	ALIGN
+	
 
 @@@ pc が指しているバンクの先頭アドレス
 pc_bank:	.long	0
@@ -1534,6 +1558,10 @@ pc_bank:	.long	0
 @@@ r0	=> 新しいPC
 @@@ 
 .macro	LOAD_PC
+#if 0
+	stmfd	sp!, {r0, lr}
+	bl	trace_jump
+#endif
 	adr	r1, memory_map
 	mov	r2, r0, lsr #13
 	ldr	r1, [r1, r2, lsl #2]
@@ -1561,6 +1589,8 @@ op6C:
 	CYCLE_NEXT	5
 
 jmp_indirect_bug:
+	mov	r0, #0x6C
+	b	emu_panic
 	b	jmp_indirect_bug
 #if 0
 	bl	read_byte
@@ -1775,17 +1805,30 @@ set_memory_map_CtoE:
 @@@ r1 には既にバンク番号がロードされている
 @@@ 
 read_rom_byte:	
-	adr	r0, memory_map
+	ldr	r0, =memory_map
 	ldr	r0, [r0, r1, lsl #2]
 	ldrb	r0, [r0, REG_ADDR]
 	mov	pc, lr
+
+rom_write_handler:	.long	0
 
 @@@ 
 @@@ 未実装
 @@@ 
 write_rom_byte:	
-	b	write_rom_byte
+	ldr	r1, rom_write_handler
+	teq	r1, #0
+	movne	pc, r1
+	mov	pc, lr
 
+@@@ 
+@@@ 
+@@@ 
+	.globl	install_rom_write_handler
+
+install_rom_write_handler:	
+	str	r0, rom_write_handler
+	mov	pc, lr
 
 @@@ 
 @@@ スプライトのDMAのアドレスを変換する
@@ -2049,4 +2092,18 @@ op5C:
 op7C:	
 opDC:	
 opFC:	
+	.globl	emu_panic
+emu_panic:
+	mov	r4, #0x04000000
+	mov	r5, #0
+	strh	r5, [r4, #0xBA]
+	strh	r5, [r4, #0x4]
+	str	r5, [r4, #0x10]
+	ldr	r2, = pc_bank
+	ldr	r2, [r2]
+	sub	r1, REG_PC, r2
+	ldr	r2, = nes_stack
+	add	r2, r2, REG_S, lsr #24
+	ldr	pc, =panic
 1:	b	1b
+	.pool

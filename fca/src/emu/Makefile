@@ -12,7 +12,14 @@ CPPFLAGS = -I../include -D__ASSEMBLY__
 SRC = main.S cpu.S mapper.S ppu.S pad.S
 OBJ = $(SRC:.S=.o)
 
-all: $(OBJ)
+SUBDIR = mapper
+
+all: $(OBJ) $(SUBDIR)
+
+.PHONY: $(SUBDIR)
+
+$(SUBDIR):
+	$(MAKE) -C $@
 
 clean:
 	rm -f *.o

@@ -73,6 +73,17 @@ SECTIONS
       _emu_slow_end = .;
     } >external_ram
 
+  OVERLAY _emu_end : NOCROSSREFS
+    {
+      mapper0
+        {
+         _start_mapper = .;
+         *(mapper0)
+        }
+      mapper3 { *(mapper3) }
+      mapper4 { *(mapper4) }
+    }
+
   _vram    = 0x06000000;
   _palette = 0x05000000;
   _sprite  = 0x07000000;

@@ -68,4 +68,5 @@ init_mapper:
 	bl	set_memory_map_8toE
 
 3:	
+	bl	_start_mapper
 	ldmfd	sp!, {pc}

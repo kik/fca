@@ -121,10 +121,28 @@ run_emulator:
 #endif
 	bl	cpu_reset
 emulate_frame:	
+	mov	r0, #0x04000000
+	ldr	r1, [r0, #0x130]
+	tst	r1, #0x100
+	bne	1f
+	tst	r1, #0x200
+	moveq	r0, #0x01000000
+	beq	emu_panic
+	mov	r2, #0x0140
+	ldr	r3, = 0x1C08
+2:	
+	strh	r2, [r0]
+	strh	r3, [r0, #0x8]
+	ldr	r1, [r0, #0x130]
+	tst	r1, #0x100
+	beq	2b
+1:	
+
 	@@ 
 	@@ フレームの開始
 	@@ 
 	bl	ppu_start_frame
+	tst	REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
 	@@ Zの場合は描画しない
 	adr	lr, 2f
 	ldreq	r0, =113 * 241
@@ -151,8 +169,8 @@ emulate_frame:
 
 	@@ 240
 	add	REG_CYCLE, REG_CYCLE, #113
-2:	
 	bl	cpu_exec
+2:	
 	@@ 241
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec

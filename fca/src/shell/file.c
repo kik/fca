@@ -21,4 +21,35 @@ find_file(char *name, struct file *f)
     }
     p = (struct file *)((char *)(p + 1) + ((p->length + 3) & ~3));
   }
+  return 0;
+}
+
+void *
+select_nes_file(struct file *f)
+{
+  struct file *p = (struct file *)&_rom_end;
+  int *key = (int *)0x04000130;
+
+  while (p->length) {
+    char *q;
+
+    q = strchr(p->name, '.');
+    if (q && strcmp(q, ".nes") == 0) {
+      printf("%s?", p->name);
+      for (;;) {
+	int k = *key;
+	if (!(k & 1)) {
+	  if (f) *f = *p;
+	  return p + 1;
+	} else if (!(k & 2)) {
+	  while (! (*key & 2))
+	    ;
+	  printf("\n");
+	  break;
+	}
+      }
+    }
+    p = (struct file *)((char *)(p + 1) + ((p->length + 3) & ~3));
+  }
+  return 0;
 }

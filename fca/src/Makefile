@@ -12,7 +12,10 @@ CFLAGS = -Iinlcude
 
 OBJ = shell/crt0.o shell/shell.o shell/text.o shell/lib.o shell/file.o \
       shell/load.o shell/disass.o \
-      emu/main.o emu/cpu.o emu/mapper.o emu/ppu.o emu/pad.o
+      emu/main.o emu/cpu.o emu/mapper.o emu/ppu.o emu/pad.o \
+      emu/mapper/mapper0.o
+
+MAPPER = mapper0.bin mapper3.bin mapper4.bin
 
 all: shell.gba
 
@@ -28,13 +31,26 @@ emu.bin: shell.elf
 emuslow.bin: shell.elf
 	$(OBJCOPY) -O binary $< $@ -j emu.slow
 
-shell.gba: shell.bin emu.bin emuslow.bin
+$(MAPPER): shell.elf
+	$(OBJCOPY) -O binary $< $@ -j $(@:.bin=)
+
+shell.gba: shell.bin emu.bin emuslow.bin $(MAPPER)
 	cp shell.bin shell.gba
 	./tool/addfile emu.bin		emu.bin		>>shell.gba
 	./tool/addfile emuslow.bin	emuslow.bin	>>shell.gba
+
+	for i in $(MAPPER); do \
+	  ./tool/addfile $$i		$$i		>>shell.gba; \
+	done
+
 	./tool/addfile data/font.dat	font.dat	>>shell.gba
-#	./tool/addfile data/test.nes	test.nes	>>shell.gba
+
+	if [ -f data/test.nes ]; then \
+	./tool/addfile data/test.nes	test.nes	>>shell.gba; \
+	fi
 	./tool/addfile data/smb1.nes	smb1.nes	>>shell.gba
+	./tool/addfile data/SMB_E.NES	smb_e.nes	>>shell.gba
+	./tool/addfile data/Dkong.nes	dkong.nes	>>shell.gba
 	./tool/endfile >>shell.gba
 
 subdir:

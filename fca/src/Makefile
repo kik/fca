@@ -15,7 +15,7 @@ OBJ = shell/crt0.o shell/shell.o shell/text.o shell/lib.o shell/file.o \
       emu/main.o emu/cpu.o emu/mapper.o emu/ppu.o emu/pad.o emu/apu.o \
       emu/mapper/mapper0.o
 
-MAPPER = mapper0.bin mapper3.bin mapper4.bin
+MAPPER = mapper0.bin mapper2.bin mapper3.bin mapper4.bin
 
 all: shell.gba
 

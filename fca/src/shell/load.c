@@ -77,6 +77,7 @@ struct mapper {
 
 static struct mapper mapper_list[] = {
   {0, "mapper0.bin"},
+  {2, "mapper2.bin"},
   {3, "mapper3.bin"},
   {4, "mapper4.bin"},
   {0, 0}

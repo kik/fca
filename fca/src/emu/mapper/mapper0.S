@@ -10,6 +10,37 @@ m0_write_rom:
 	b	emu_panic
 
 
+	.section mapper2, "awx"
+init_mapper2:	
+	stmfd	sp!, {lr}
+	ldr	r0, = prg_rom_start
+	ldr	r0, [r0]
+	str	r0, m2_prg_rom
+
+	ldr	r1, = n_prg_rom
+	ldr	r1, [r1]
+	str	r1, m2_n_prg_rom
+
+	add	r0, r0, r1, lsl #14
+	sub	r0, r0, #0x4000 + 0xC000
+	bl	set_memory_map_CtoE
+
+	adr	r0, m2_write_rom
+	bl	install_rom_write_handler
+
+	ldmfd	sp!, {pc}
+
+m2_write_rom:
+	ldr	r1, m2_n_prg_rom
+	sub	r1, r1, #1
+	and	r0, r0, r1
+	ldr	r1, m2_prg_rom
+	add	r0, r1, r0, lsl #14
+	sub	r0, r0, #0x8000
+	b	set_memory_map_8toA
+
+m2_prg_rom:	.long	0
+m2_n_prg_rom:	.long	0
 
 	.section mapper3, "awx"
 

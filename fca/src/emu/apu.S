@@ -202,7 +202,7 @@ do_ch1:
 	tst	r1, #1
 	orreq	r2, r2, #0x8000
 	str	r2, [r0, #GBA_SG11]
-#if 0
+#if 1
 do_ch2:	
 	adr	r0, ch2_reg
 	bl	update_square

@@ -290,11 +290,47 @@ ppu_start_frame:
 	mov	r1, r1, lsr #16
 	str	r1, loopy_v
 
-	@ldr	r1, =skip_table
-	@str	r1, nes_line
-	mov	r1, #256 - 9
-	strb	r1, gba_line_0
-	strb	r1, gba_line_1
+@@@ 
+@@@ さて，ここで画面の上部をどれだけ隠すかを決める
+@@@ 10数ラインほど隠すのがよい
+@@@          10987654321|
+@@@ GBA                 01234567890123456789012345678
+@@@                     |
+@@@ BG0 上← 012345012345012345012345012345012345012345
+@@@ BG1 上←   234567234567234567234567234567234567234567
+@@@ NES
+@@@ 
+@@@ よってGBAの-11ラインから描画を始めたいわけだが
+@@@ これだとスクロールYの値の変化で3ライン一気に飛ぶ場合があり
+@@@ きれいにスクロールできない
+@@@          10987654321|
+@@@ GBA      |          01234567890123456789012345678
+@@@          |          |
+@@@ BG0 上← 012345012345012345012345012345012345012345
+@@@ BG1 上←   234567234567234567234567234567234567234567
+@@@ NES
+@@@ Y off 0  |          |
+@@@       1   |          |
+@@@       2    |          |
+@@@       3     |         *|
+@@@       4      |         *|
+@@@       5       |         *|
+@@@       6       |          |
+@@@       7       |          |*
+@@@       8                   |
+@@@ *の位置に修正する
+@@@ 
+	mov	r2, #256 - 11
+	@@ NES Y offset
+	and	r1, r1, #0x7000
+	cmp	r1, #0x3000
+	addcs	r2, r2, #1
+	cmp	r1, #0x6000
+	subcc	r2, r2, #1
+	teq	r1, #0x7000
+	subeq	r2, r2, #1
+	strb	r2, gba_line_0
+	strb	r2, gba_line_1
 
 	bl	validate_tile
 	bl	validate_spr
@@ -407,7 +443,7 @@ draw_line:
 	orr	r2, r2, r1, lsr #13
 	and	r3, r1, #0x04000000
 	orr	r2, r2, r3, lsr #18
-	@add	r2, r2, #0x8
+	add	r2, r2, #0x8
 
 	@@ loopy_v を更新
 	orr	r0, r0, r1, lsr #16
@@ -732,14 +768,21 @@ write_4014:
 	ldr	r3, [r0], #4
 	@@ Y
 	and	r5, r3, #255
+#if 0
 	adr	r4, skip_table
 	ldrb	r4, [r4, r5]
-	strb	r4, [r1], #8
+#endif
+	sub	r5, r5, #15
+	add	r5, r5, r5, lsl #1
+	mov	r5, r5, lsr #2
+	strb	r5, [r1], #8
 
 @	ldrh	r4, [r1, #-6]
 @	and	r4, r4, #0xC000
 @	orr	r4, r4, r3, lsr #24
 	mov	r4, r3, lsr #24
+	sub	r4, r4, #8
+	bic	r4, r4, #0xFE00
 	and	r5, r3, #0xC0 << 16
 	orr	r4, r4, r5, lsr #10
 	strh	r4, [r1, #-6]
@@ -843,7 +886,12 @@ write_spr_2:
 
 write_spr_3:	
 	@@ Spr X
-	strb	r0, [r3, #2]
+	sub	r0, r0, #8
+	ldrh	r1, [r3, #2]
+	and	r1, r1, #0xFE00
+	bic	r0, r0, #0xFE00
+	orr	r0, r1, r0
+	strh	r0, [r3, #2]
 	mov	pc, lr
 
 spr_old:	.long	0

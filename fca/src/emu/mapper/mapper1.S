@@ -9,13 +9,13 @@
 reset_mapper1:	
 	stmfd	sp!, {lr}
 
-	ldopt	r0, EMU_OPT_chr_rom_start
-	str	r0, m1_chr_rom
 	ldopt	r0, EMU_OPT_n_chr_rom
 	str	r0, m1_n_chr_rom
+	teq	r0, #0
+	orreq	REG_P_REST, REG_P_REST, #P_REST_HAS_VRAM
+	movne	r0, #0
+	blne	set_vram_bank_0to7
 
-	ldopt	r0, EMU_OPT_prg_rom_start
-	str	r0, m1_prg_rom
 	ldopt	r1, EMU_OPT_n_prg_rom
 	mov	r2, #M1_SMALL
 	teq	r1, #64
@@ -69,47 +69,8 @@ m1_set_cpu_banks:
 	m1_cpu_bank	m1_bank2;	bl	set_memory_map_C
 	m1_cpu_bank	m1_bank3;	bl	set_memory_map_E
 
-#if 0
-	ldr	r0, m1_prg_rom
-	ldr	r1, m1_256k_base
-	ldr	r2, m1_bank0
-	and	r2, r2, #31
-	add	r0, r0, r1, lsl #18
-	add	r0, r0, r2, lsl #13
-	sub	r0, r0, #0x8000
-	bl	set_memory_map_8
-	
-	ldr	r0, m1_prg_rom
-	ldr	r1, m1_256k_base
-	ldr	r2, m1_bank1
-	and	r2, r2, #31
-	add	r0, r0, r1, lsl #18
-	add	r0, r0, r2, lsl #13
-	sub	r0, r0, #0xA000
-	bl	set_memory_map_A
-	
-	ldr	r0, m1_prg_rom
-	ldr	r1, m1_256k_base
-	ldr	r2, m1_bank2
-	and	r2, r2, #31
-	add	r0, r0, r1, lsl #18
-	add	r0, r0, r2, lsl #13
-	sub	r0, r0, #0xC000
-	bl	set_memory_map_C
-	
-	ldr	r0, m1_prg_rom
-	ldr	r1, m1_256k_base
-	ldr	r2, m1_bank3
-	and	r2, r2, #31
-	add	r0, r0, r1, lsl #18
-	add	r0, r0, r2, lsl #13
-	sub	r0, r0, #0xE000
-	bl	set_memory_map_E
-#endif
 	ldmfd	sp!, {pc}
 
-m1_prg_rom:		.long	0
-m1_chr_rom:		.long	0
 m1_n_chr_rom:		.long	0
 
 m1_write_rom_count:	.long	0
@@ -163,20 +124,31 @@ m1_write_rom:
 	and	r0, r0, #3
 	ldr	pc, [pc, r0, lsl #2]
 	nop
-	.word	0f, 1f, 2f, 3f
+	.word	write_reg_0, write_reg_1, write_reg_2, write_reg_3
 
-0:	
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ reg 0
+@@@ 
+
+write_reg_0:	
 	strb	r3, m1_regs
 	and	r0, r3, #3
 	ldr	pc, [pc, r0, lsl #2]
 	nop
+	@@ 実際には少し違うらしい
 	.word	set_v_scroll
 	.word	set_v_scroll
 	.word	set_h_scroll
 	.word	set_v_scroll
 
-	mov	pc, lr
-1:	
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ reg 1
+@@@ 
+write_reg_1:	
 	strb	r3, m1_regs + 1
 	ldr	r0, m1_size
 	teq	r0, #M1_1024K
@@ -223,25 +195,15 @@ m1_write_rom:
 	mov	r0, r1, lsl #2
 	bne	set_vram_bank_0to3
 	beq	set_vram_bank_0to7
-#if 0
-	mov	r1, r1, lsl #2
-	ldr	r0, m1_chr_rom
-	add	r0, r0, r1, lsl #10
-	add	r2, r1, #1
-	orr	r1, r1, r2, lsl #8
-	add	r2, r2, #1
-	orr	r1, r1, r2, lsl #16
-	add	r2, r2, #1
-	orr	r1, r1, r2, lsl #24
-	ldr	r2, = 0x04040404
-	add	r2, r1, r2
-	bne	set_vram_bank_0to3
-	beq	set_vram_bank_0to7
-#endif
 13:	
 	mov	pc, lr
 
-2:	
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ reg 2
+@@@ 
+write_reg_2:	
 	stmfd	sp!, {lr}
 	strb	r3, m1_regs + 2
 	ldr	r1, m1_regs
@@ -272,21 +234,14 @@ m1_write_rom:
 	ldrb	r0, m1_regs + 2
 	mov	r0, r0, lsl #2
 	bl	set_vram_bank_4to7
-#if 0
-	ldr	r0, m1_chr_rom
-	ldrb	r1, m1_regs + 2
-	mov	r1, r1, lsl #2
-	add	r0, r0, r1, lsl #10
-	add	r2, r1, #1
-	orr	r1, r1, r2, lsl #8
-	add	r2, r2, #1
-	orr	r1, r1, r2, lsl #16
-	add	r2, r2, #1
-	orr	r1, r1, r2, lsl #24
-	bl	set_vram_bank_4to7
-#endif
 	ldmfd	sp!, {pc}
-3:	
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ 
+@@@ 
+write_reg_3:	
 	strb	r3, m1_regs + 3
 	ldr	r2, m1_regs
 	tst	r2, #0x08

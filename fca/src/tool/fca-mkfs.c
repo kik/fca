@@ -112,6 +112,10 @@ char *system_files[] = {
   "mapper2.bin", "mapper2", "bin",
   "mapper3.bin", "mapper3", "bin",
   "mapper4.bin", "mapper4", "bin",
+  "mapper9.bin", "mapper9", "bin",
+  "mapper10.bin", "mapper10", "bin",
+  "mapper21.bin", "mapper21", "bin",
+  "mapper66.bin", "mapper66", "bin",
   0
 };
 

@@ -91,6 +91,10 @@ static struct mapper mapper_list[] = {
   {2, "mapper2"},
   {3, "mapper3"},
   {4, "mapper4"},
+  {9, "mapper9"},
+  {10, "mapper10"},
+  {21, "mapper21"},
+  {66, "mapper66"},
   {0, 0}
 };
 

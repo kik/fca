@@ -14,6 +14,7 @@ init_mapper:
 	.globl	reset_mapper
 reset_mapper:	
 	stmfd	sp!, {lr}
+#if 0
 	ldopt	r1, EMU_OPT_n_chr_rom
 	teq	r1, #0
 	orreq	REG_P_REST, REG_P_REST, #P_REST_HAS_VRAM
@@ -29,6 +30,7 @@ reset_mapper:
 	bl	set_vram_bank_0to7
 
 1:	
+#endif
 #if 0
 	ldopt	r1, EMU_OPT_n_prg_rom
 	teq	r1, #1

@@ -737,12 +737,17 @@ enter_emu_ppu:
 
 	.globl	read_save_ram
 	.globl	write_save_ram
+	.globl	write_save_ram_real
 read_save_ram:	
 	ldr	r1, = save_ram - 0x6000
 	ldrb	r0, [r1, REG_ADDR]
 	mov	pc, lr
 
 write_save_ram:	
+	ldr	r1, save_ram_write_handler
+	teq	r1, #0
+	movne	pc, r1
+write_save_ram_real:	
 	ldr	r1, = save_ram - 0x6000
 	strb	r0, [r1, REG_ADDR]
 	ldr	r1, save_data_write
@@ -753,6 +758,12 @@ write_save_ram:
 	mov	pc, lr
 
 save_data_write:	.long	0
+save_ram_write_handler:	.long	0
+
+	.globl install_save_ram_write_handler
+install_save_ram_write_handler:	
+	str	r0, save_ram_write_handler
+	mov	pc, lr
 
 	.pool
 

@@ -15,32 +15,15 @@ reset_mapper4:
 	ldr	r0, = 0x07060504
 	str	r0, m4_chr4
 
-	ldopt	r0, EMU_OPT_prg_rom_start
-	str	r0, m4_prg_rom
-#if 0
-	str	r0, m4_prg0
-	add	r1, r0, #0x2000
-	str	r1, m4_prg1
-#endif
 	mov	r1, #0
 	str	r1, m4_prg0
 	mov	r1, #1
 	str	r1, m4_prg1
 
 	ldopt	r1, EMU_OPT_n_prg_rom
-	str	r1, m4_n_prg_rom
-
-#if 0
-	add	r0, r0, r1, lsl #14
-	sub	r0, r0, #0x4000
-	str	r0, m4_prg_rom_last
-#endif
 	mov	r1, r1, lsl #1
 	sub	r1, r1, #2
 	str	r1, m4_prg_rom_last
-
-	ldopt	r0, EMU_OPT_chr_rom_start
-	str	r0, m4_chr_rom
 
 	ldopt	r0, EMU_OPT_n_chr_rom
 	str	r0, m4_n_chr_rom
@@ -48,7 +31,7 @@ reset_mapper4:
 	adr	r0, m4_write_rom
 	bl	install_rom_write_handler
 	bl	m4_set_cpu_banks
-	@bl	m4_set_ppu_banks
+	bl	m4_set_ppu_banks
 
 	adr	r0, m4_hsync
 	bl	install_hsync_handler
@@ -57,8 +40,6 @@ reset_mapper4:
 
 	.pool
 
-m4_n_prg_rom:	.long	0
-m4_prg_rom:	.long	0
 m4_prg_rom_last:
 		.long	0
 m4_regs:	.fill	8, 1, 0
@@ -66,7 +47,6 @@ m4_prg0:	.long	0
 m4_prg1:	.long	0
 
 m4_n_chr_rom:	.long	0
-m4_chr_rom:	.long	0
 
 m4_chr0:	.byte	0
 m4_chr1:	.byte	1
@@ -96,8 +76,15 @@ m4_write_rom:
 	mov	pc, lr
 
 m4_write_8000:
+	stmfd	sp!, {r4, lr}
+	ldrb	r1, m4_regs
 	strb	r0, m4_regs
-	b	m4_set_cpu_banks
+	eor	r4, r0, r1
+	tst	r4, #0x40
+	blne	m4_set_cpu_banks
+	tst	r4, #0x80
+	blne	m4_set_ppu_banks
+	ldmfd	sp!, {r4, pc}
 
 m4_write_8001:
 	strb	r0, m4_regs + 1
@@ -112,88 +99,66 @@ m4_write_8001:
 	moveq	pc, lr
 	and	r0, r0, #0xFE
 	strb	r0, m4_chr0
-	b	set_vram_bank_0to1	
-#if 0
-	and	r0, r0, #0xFE
-	orr	r1, r0, r0, lsl #8
-	add	r1, r1, #1
-	strh	r1, m4_chr0
-	ldr	r2, m4_chr_rom
-	add	r0, r2, r0, lsl #10
-	b	set_vram_bank_0to1
-#endif
+
+	ldrb	r1, m4_regs
+	tst	r1, #0x80
+	beq	set_vram_bank_0to1
+	bne	set_vram_bank_4to5
 1:	
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
 	moveq	pc, lr
 	and	r0, r0, #0xFE
 	strb	r0, m4_chr2
-	b	set_vram_bank_2to3
-#if 0
-	and	r0, r0, #0xFE
-	orr	r1, r0, r0, lsl #8
-	add	r1, r1, #1
-	strh	r1, m4_chr2
-	ldr	r2, m4_chr_rom
-	add	r0, r2, r0, lsl #10
-	b	set_vram_bank_2to3
-#endif
+
+	ldrb	r1, m4_regs
+	tst	r1, #0x80
+	beq	set_vram_bank_2to3
+	bne	set_vram_bank_6to7
 2:	
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
 	moveq	pc, lr
 	strb	r0, m4_chr4
-	b	set_vram_bank_4
-#if 0
-	mov	r1, r0
-	ldr	r2, m4_chr_rom
-	add	r0, r2, r0, lsl #10
-	b	set_vram_bank_4
-#endif
+
+	ldrb	r1, m4_regs
+	tst	r1, #0x80
+	beq	set_vram_bank_4
+	bne	set_vram_bank_0
 3:	
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
 	moveq	pc, lr
 	strb	r0, m4_chr5
-#if 0
-	mov	r1, r0
-	ldr	r2, m4_chr_rom
-	add	r0, r2, r0, lsl #10
-#endif
-	b	set_vram_bank_5
+
+	ldrb	r1, m4_regs
+	tst	r1, #0x80
+	beq	set_vram_bank_5
+	bne	set_vram_bank_1
 4:	
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
 	moveq	pc, lr
 	strb	r0, m4_chr6
-#if 0
-	mov	r1, r0
-	ldr	r2, m4_chr_rom
-	add	r0, r2, r0, lsl #10
-#endif
-	b	set_vram_bank_6
+
+	ldrb	r1, m4_regs
+	tst	r1, #0x80
+	beq	set_vram_bank_6
+	bne	set_vram_bank_2
 5:	
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
 	moveq	pc, lr
 	strb	r0, m4_chr7
-#if 0
-	mov	r1, r0
-	ldr	r2, m4_chr_rom
-	add	r0, r2, r0, lsl #10
-#endif
-	b	set_vram_bank_7
 
+	ldrb	r1, m4_regs
+	tst	r1, #0x80
+	beq	set_vram_bank_7
+	bne	set_vram_bank_3
 6:	
-	@ldr	r1, m4_prg_rom
-	@add	r0, r1, r0, lsl #13
-	@str	r0, m4_prg0
 	str	r0, m4_prg0
 	b	m4_set_cpu_banks
 7:	
-	@ldr	r1, m4_prg_rom
-	@add	r0, r1, r0, lsl #13
-	@str	r0, m4_prg1
 	str	r0, m4_prg1
 	b	m4_set_cpu_banks
 
@@ -201,7 +166,7 @@ m4_write_A000:
 	tst	r0, #1
 	bne	set_v_scroll
 	b	set_h_scroll
-	mov	pc, lr
+
 m4_write_A001:
 	mov	pc, lr
 m4_write_C000:
@@ -228,106 +193,46 @@ m4_set_cpu_banks:
 	tst	r0, #0x40
 	beq	1f
 
-#if 0	
+	ldr	r0, m4_prg_rom_last;	bl	set_memory_map_8
+	ldr	r0, m4_prg1;		bl	set_memory_map_A
+	ldr	r0, m4_prg0;		bl	set_memory_map_C
 	ldr	r0, m4_prg_rom_last
-	sub	r0, r0, #0x8000
-	bl	set_memory_map_8
-
-	ldr	r0, m4_prg1
-	sub	r0, r0, #0xA000
-	bl	set_memory_map_A
-
-	ldr	r0, m4_prg0
-	sub	r0, r0, #0xC000
-	bl	set_memory_map_C
-
-	ldr	r0, m4_prg_rom_last
-	sub	r0, r0, #0xE000 - 0x2000
-	bl	set_memory_map_E
-#endif
-	ldr	r0, m4_prg_rom_last
-	bl	set_memory_map_8
-
-	ldr	r0, m4_prg1
-	bl	set_memory_map_A
-
-	ldr	r0, m4_prg0
-	bl	set_memory_map_C
-
-	ldr	r0, m4_prg_rom_last
-	add	r0, r0, #1
-	bl	set_memory_map_E
+	add	r0, r0, #1;		bl	set_memory_map_E
 
 	ldmfd	sp!, {pc}
 1:	
-#if 0
-	ldr	r0, m4_prg0
-	sub	r0, r0, #0x8000
-	bl	set_memory_map_8
-
-	ldr	r0, m4_prg1
-	sub	r0, r0, #0xA000
-	bl	set_memory_map_A
-
-	ldr	r0, m4_prg_rom_last
-	sub	r0, r0, #0xC000
-	bl	set_memory_map_CtoE
-#endif
-	ldr	r0, m4_prg0
-	bl	set_memory_map_8
-
-	ldr	r0, m4_prg1
-	bl	set_memory_map_A
-
-	ldr	r0, m4_prg_rom_last
-	bl	set_memory_map_CtoE
+	ldr	r0, m4_prg0;		bl	set_memory_map_8
+	ldr	r0, m4_prg1;		bl	set_memory_map_A
+	ldr	r0, m4_prg_rom_last;	bl	set_memory_map_CtoE
 
 	ldmfd	sp!, {pc}
 
-#if 0
-m4_set_ppu_banks:
+m4_set_ppu_banks:	
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
 	moveq	pc, lr
 
 	stmfd	sp!, {lr}
-	bl	get_tile_map
-	ldr	r1, m4_chr_rom
+	ldrb	r0, m4_regs
+	tst	r0, #0x80
+	bne	1f
 
-	ldr	r2, m4_chr01
-	add	r2, r1, r2, lsl #10
-	str	r2, [r0]
-	str	r2, [r0, #0x4]
+	ldrb	r0, m4_chr0;	bl	set_vram_bank_0to1
+	ldrb	r0, m4_chr2;	bl	set_vram_bank_2to3
+	ldrb	r0, m4_chr4;	bl	set_vram_bank_4
+	ldrb	r0, m4_chr5;	bl	set_vram_bank_5
+	ldrb	r0, m4_chr6;	bl	set_vram_bank_6
+	ldrb	r0, m4_chr7;	bl	set_vram_bank_7
+	ldmfd	sp!, {pc}
+1:	
+	ldrb	r0, m4_chr4;	bl	set_vram_bank_0
+	ldrb	r0, m4_chr5;	bl	set_vram_bank_1
+	ldrb	r0, m4_chr6;	bl	set_vram_bank_2
+	ldrb	r0, m4_chr7;	bl	set_vram_bank_3
+	ldrb	r0, m4_chr0;	bl	set_vram_bank_4to5
+	ldrb	r0, m4_chr2;	bl	set_vram_bank_6to7
+	ldmfd	sp!, {pc}
 
-	ldr	r2, m4_chr23
-	add	r2, r1, r2, lsl #10
-	sub	r2, r2, #0x800
-	str	r2, [r0, #0x8]
-	str	r2, [r0, #0xC]
-
-	ldr	r2, m4_chr4
-	add	r2, r1, r2, lsl #10
-	sub	r2, r2, #0x1000
-	str	r2, [r0, #0x10]
-
-	ldr	r2, m4_chr5
-	add	r2, r1, r2, lsl #10
-	sub	r2, r2, #0x1400
-	str	r2, [r0, #0x14]
-
-	ldr	r2, m4_chr6
-	add	r2, r1, r2, lsl #10
-	sub	r2, r2, #0x1800
-	str	r2, [r0, #0x18]
-
-	ldr	r2, m4_chr7
-	add	r2, r1, r2, lsl #10
-	sub	r2, r2, #0x1C00
-	str	r2, [r0, #0x1C]
-
-	ldmfd	sp!, {lr}
-
-#endif
 m4_hsync:	
 	ldr	r1, m4_enb_irq
 	teq	r1, #0

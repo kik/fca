@@ -318,7 +318,7 @@ update_tile_ram:
 
 update_tile_per_line:	
 	ldr	r0, screen_size
-	orr	r0, r0, #GBA_BG_CR_MAP_ADDR(0x4)
+	@orr	r0, r0, #GBA_BG_CR_MAP_ADDR(0x4)
 	tst	REG_P_REST, #P_REST_HAS_VRAM
 	beq	1f
 

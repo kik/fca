@@ -84,6 +84,10 @@ SECTIONS
       mapper2 { *(mapper2) }
       mapper3 { *(mapper3) }
       mapper4 { *(mapper4) }
+      mapper9 { *(mapper9) }
+      mapper10 { *(mapper10) }
+      mapper21 { *(mapper21) }
+      mapper66 { *(mapper66) }
     }
 
   _vram    = 0x06000000;

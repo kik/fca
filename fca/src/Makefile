@@ -12,7 +12,8 @@ CFLAGS = -Iinlcude
 
 OBJ = shell/shells.o emu/emu.o emu/mapper/mappers.o
 
-MAPPER = mapper0.bin mapper1.bin mapper2.bin mapper3.bin mapper4.bin
+MAPPER = mapper0.bin mapper1.bin mapper2.bin mapper3.bin mapper4.bin \
+	mapper9.bin mapper10.bin mapper21.bin mapper66.bin
 
 BIN = shell.bin emu.bin emuslow.bin $(MAPPER)
 

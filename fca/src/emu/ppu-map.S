@@ -53,6 +53,8 @@ map_table_map:
 	.globl	set_v_scroll
 	.globl	set_h_scroll
 	.globl	set_4_scroll
+	.globl	set_0_scroll
+	.globl	set_1_scroll
 
 set_h_scroll:	
 	mov	r0, #0x06000000
@@ -65,6 +67,7 @@ set_h_scroll:
 	str	r0, [r1, #12]
 
 	mov	r0, #GBA_BG_CR_SIZE_512x256
+	orr	r0, r0, #GBA_BG_CR_MAP_ADDR(4)
 	b	set_screen_size
 
 set_v_scroll:	
@@ -78,6 +81,7 @@ set_v_scroll:
 	str	r0, [r1, #12]
 
 	mov	r0, #GBA_BG_CR_SIZE_256x512
+	orr	r0, r0, #GBA_BG_CR_MAP_ADDR(4)
 	b	set_screen_size
 
 
@@ -94,6 +98,29 @@ set_4_scroll:
 	str	r0, [r1, #12]
 
 	mov	r0, #GBA_BG_CR_SIZE_512x512
+	orr	r0, r0, #GBA_BG_CR_MAP_ADDR(4)
+	b	set_screen_size
+
+set_0_scroll:	
+	mov	r0, #0x06000000
+	add	r0, r0, #0x2000
+	str	r0, map_table_map
+	str	r0, map_table_map + 4
+	str	r0, map_table_map + 8
+	str	r0, map_table_map + 12
+	mov	r0, #GBA_BG_CR_SIZE_256x256
+	orr	r0, r0, #GBA_BG_CR_MAP_ADDR(4)
+	b	set_screen_size
+
+set_1_scroll:	
+	mov	r0, #0x06000000
+	add	r0, r0, #0x2400
+	str	r0, map_table_map
+	str	r0, map_table_map + 4
+	str	r0, map_table_map + 8
+	str	r0, map_table_map + 12
+	mov	r0, #GBA_BG_CR_SIZE_256x256
+	orr	r0, r0, #GBA_BG_CR_MAP_ADDR(5)
 	b	set_screen_size
 
 @@@ 

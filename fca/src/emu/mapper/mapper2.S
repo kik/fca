@@ -4,8 +4,8 @@
 	.section mapper2, "awx"
 reset_mapper2:	
 	stmfd	sp!, {lr}
-	ldopt	r0, EMU_OPT_prg_rom_start
-	str	r0, m2_prg_rom
+
+	orr	REG_P_REST, REG_P_REST, #P_REST_HAS_VRAM
 
 	mov	r0, #0
 	bl	set_memory_map_8toA
@@ -25,13 +25,9 @@ m2_write_rom:
 	ldr	r1, m2_n_prg_rom
 	sub	r1, r1, #1
 	and	r0, r0, r1
-	@ldr	r1, m2_prg_rom
-	@add	r0, r1, r0, lsl #14
-	@sub	r0, r0, #0x8000
 	mov	r0, r0, lsl #1
 	b	set_memory_map_8toA
 
-m2_prg_rom:	.long	0
 m2_n_prg_rom:	.long	0
 
 	.pool

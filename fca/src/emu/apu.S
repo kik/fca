@@ -614,11 +614,13 @@ init_apu:
 	msr	CPSR_f, r0
 	bne	1f
 #endif
+#if 1
 	@@ timer0 240/Hz
 	mvn	r0, #67
 	str	r0, [r1, #0x100]
 	mov	r0, #0xC3
 	strb	r0, [r1, #0x102]
+#endif
 1:	
 
 	mov	r0, #0x80

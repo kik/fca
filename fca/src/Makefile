@@ -16,7 +16,7 @@ OBJ = shell/crt0.o shell/shell.o shell/text.o shell/lib.o shell/file.o \
       emu/ppu-palette.o emu/ppu-spr.o emu/ppu-tile.o emu/pad.o emu/apu.o \
       emu/mapper/mapper0.o
 
-MAPPER = mapper0.bin mapper2.bin mapper3.bin mapper4.bin
+MAPPER = mapper0.bin mapper1.bin mapper2.bin mapper3.bin mapper4.bin
 
 all: shell.gba
 
@@ -49,9 +49,12 @@ shell.gba: shell.bin emu.bin emuslow.bin $(MAPPER)
 	if [ -f data/test.nes ]; then \
 	./tool/addfile data/test.nes	test.nes	>>shell.gba; \
 	fi
-	./tool/addfile data/smb1.nes	smb1.nes	>>shell.gba
-	./tool/addfile data/SMB_E.NES	smb_e.nes	>>shell.gba
-	./tool/addfile data/Dkong.nes	dkong.nes	>>shell.gba
+	if [ -f data/test.sav ]; then \
+	./tool/addfile data/test.sav	test.sav	>>shell.gba; \
+	fi
+#	./tool/addfile data/smb1.nes	smb1.nes	>>shell.gba
+#	./tool/addfile data/SMB_E.NES	smb_e.nes	>>shell.gba
+#	./tool/addfile data/Dkong.nes	dkong.nes	>>shell.gba
 	./tool/endfile >>shell.gba
 
 subdir:

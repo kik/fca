@@ -276,7 +276,7 @@ ppu_start_frame:
 
 	strh	r0, [r1, #GBA_DISP_CR]
 	@@ BGもSPRも描かないならここでおわり
-	moveq	pc, lr
+	ldmeqfd	sp!, {pc}
 
 	@@ αブレンドを設定
 	ldr	r0, =0x08080241
@@ -721,8 +721,23 @@ write_save_ram:
 	SECTION_SLOW
 	ALIGN
 
+	.globl	_save_data
+_save_data:	.long	0
+
 	.globl	init_save_ram
-init_save_ram:	
+init_save_ram:
+	ldr	r0, _save_data
+	teq	r0, #0
+	beq	2f	
+	mov	r1, #0x0E000000
+	mov	r2, #0x2000
+1:	
+	ldrb	r3, [r0], #1
+	strb	r3, [r1], #1
+	subs	r2, r2, #1
+	bne	1b
+	@mov	pc, lr
+2:	
 	mov	r0, #0x0E000000
 	adr	r1, save_ram
 	mov	r2, #0x2000

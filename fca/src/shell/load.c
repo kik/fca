@@ -57,6 +57,12 @@ load_emulator(void *nes_file)
   }
   printf("load emuslow.bin\n %x -> %x\n", p, &_emu_slow_start);
   memcpy(&_emu_slow_start, p, f.length);
+
+  p = find_file("test.sav", &f);
+  {
+    extern void *_save_data;
+    _save_data = p;
+  }
 }
 
 
@@ -68,6 +74,7 @@ extern int has_sram;
 extern void *prg_rom_start;
 extern void *chr_rom_start;
 
+
 extern int _start_mapper;
 
 struct mapper {
@@ -77,6 +84,7 @@ struct mapper {
 
 static struct mapper mapper_list[] = {
   {0, "mapper0.bin"},
+  {1, "mapper1.bin"},
   {2, "mapper2.bin"},
   {3, "mapper3.bin"},
   {4, "mapper4.bin"},
@@ -157,4 +165,30 @@ enter_emulator(void *nes_file)
   void (*start)(void *nes_file) = emulator_entry;
   printf("call %x\n", start);
   start(nes_file);
+}
+
+void
+compare_memory()
+{
+  long *p, *q;
+  struct file f;
+  int i, j;
+
+  //show_nes_header(nes_file);
+  p = find_file("emu.bin", &f);
+  q = &_emu_start;
+
+  for (i = 0; i < f.length;) {
+    for (j = 0; j < 8 && i < f.length;) {
+      if (*q != *p) {
+	printf("%x %x\n", q, *q);
+	j++;
+      }
+      p++; q++; i += 4;
+    }
+    while (_ioreg[0x98] & 1)
+      ;
+    while (! (_ioreg[0x98] & 1))
+      ;
+  }
 }

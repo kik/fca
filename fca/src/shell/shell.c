@@ -15,6 +15,7 @@ start_shell(void)
   _ioreg[0] = 0x0140;
   _ioreg[5] = 0x0704;
   _ioreg[0x102] = 0x4004;
+  _ioreg[0x102] = 0x4000;
   for (i = 0; i < 32 * 32; i++)
     _vram[0x2000 + i] = i;
 
@@ -57,7 +58,6 @@ panic(int op, int pc, unsigned char *sp, void *p)
   _ioreg[8] = 0;
   _ioreg[9] = 0;
   _ioreg[5] = 0x0704;
-  _ioreg[0x102] = 0x4004;
   for (i = 0; i < 32 * 32; i++)
     _vram[0x2000 + i] = i;
 
@@ -76,6 +76,8 @@ panic(int op, int pc, unsigned char *sp, void *p)
   for (i = 0; i < 4; i++, sp += 8)
     printf("%x %x %x %x %x %x %x %x\n", sp[0], sp[1], sp[2], sp[3],
 	   sp[4], sp[5], sp[6], sp[7]);
+
+  compare_memory();
 
   while (1)
     ;
@@ -96,7 +98,6 @@ panic_from_int()
   _ioreg[8] = 0;
   _ioreg[9] = 0;
   //_ioreg[4] = 0x1C08;
-  //_ioreg[0x102] = 0x4004;
 #if 0
   for (i = 0; i < 32 * 32; i++)
     _vram[0x2000 + i] = i;
@@ -105,6 +106,8 @@ panic_from_int()
   printf("PANIC from int!!!\n");
   for (i = 0; i < 9; i++, p += 2)
     printf("%x %x\n", p[0], p[1]);
+
+  compare_memory();
 
   while (1)
     ;

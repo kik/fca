@@ -33,7 +33,7 @@ shell.gba: shell.bin emu.bin emuslow.bin
 	./tool/addfile emu.bin		emu.bin		>>shell.gba
 	./tool/addfile emuslow.bin	emuslow.bin	>>shell.gba
 	./tool/addfile data/font.dat	font.dat	>>shell.gba
-	./tool/addfile data/test.nes	test.nes	>>shell.gba
+#	./tool/addfile data/test.nes	test.nes	>>shell.gba
 	./tool/addfile data/smb1.nes	smb1.nes	>>shell.gba
 	./tool/endfile >>shell.gba
 

@@ -144,8 +144,8 @@ emulate_frame:
 	bl	ppu_start_vbl
 	mov	REG_CYCLE, #1
 	bl	cpu_exec
-	bl	ppu_nmi_enabled
-	orrne	REG_P_REST, REG_P_REST, #P_REST_NMI_PENDING
+	@bl	ppu_nmi_enabled
+	@orrne	REG_P_REST, REG_P_REST, #P_REST_NMI_PENDING
 	mov	REG_CYCLE, #112
 	bl	cpu_exec
 

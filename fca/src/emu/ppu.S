@@ -1,8 +1,8 @@
 #include "nes.h"
 
 
-
-
+	SECTION_FAST
+	ALIGN
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -42,16 +42,22 @@ write_ppu_reg:
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@ 
+@@@ PPU の制御レジスタ
+@@@ 
+@@@ これらは REG_P_REST におかれる
+@@@ 
+@@@ P_REST[7]		$2005/$2006 トグルフラグ
+@@@ P_REST[8-D]		$2000[2-7]
+@@@ P_REST[E-F]		$2001[3-4]
+@@@ P_REST[10-14]	$2002[4-7]
+@@@ 
+@@@ という配置になっている
+@@@ 
+
+@@@ 
 @@@ $2000に書く
 @@@ 
-@@@ 0
-@@@ FEDCBA98 76543210
-@@@ |||||||+---$2000 32インクリメント
-@@@ ||||||+---$2000 スプライトアドレス選択
-@@@ |||||+---$2000 バックグラウンドアドレス選択
-@@@ ||||+---$2000 スプライトサイズ
-@@@ |||+---$2000 NMI許可
-@@@ 
+@@@ P_REST[8-D]		$2000[2-7]
 @@@ 
 
 write_2000:	
@@ -68,11 +74,10 @@ write_2000:
 
 	mov	pc, lr
 
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@ 
 @@@ $2001 に書く
 @@@ 
+@@@ P_REST[E-F]		$2001[3-4]
 @@@ 
 write_2001:	
 	and	r1, r0, #0x18
@@ -80,10 +85,10 @@ write_2001:
 	orr	REG_P_REST, REG_P_REST, r1, lsl #11
 	mov	pc, lr
 
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@ 
 @@@ $2002 を読む
+@@@ 
+@@@ P_REST[10-14]	$2002[4-7]
 @@@ 
 
 read_2002:	
@@ -92,16 +97,20 @@ read_2002:
 	mov	r0, r0, lsl #12
 	mov	pc, lr
 
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@ 
 @@@ $2002 には書けない
 @@@ 
 write_2002:	
 	mov	pc, lr
 
+
+
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ スプライトの管理レジスタ
+@@@ 
+
 @@@ 
 @@@ $2003 に書く
 @@@ 
@@ -112,8 +121,6 @@ write_2003:
 #endif
 	mov	pc, lr
 
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@ 
 @@@ $2004 に書く
 @@@ 
@@ -128,8 +135,24 @@ write_2004:
 #endif
 	mov	pc, lr
 
+
+
+
+
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ VRAM の R/W レジスタ
+@@@ 
+
+@@@ 
+@@@ 同時にロード・ストアできるようにloopy_t は loop_xの次におく
+@@@ loopy_x は上3ビットを使う
+@@@ 
+loopy_x:	.short	0
+loopy_t:	.short	0
+loopy_v:	.long	0
+
 @@@ 
 @@@ $2005 に書く
 @@@ 
@@ -162,9 +185,6 @@ write_2005:
 	strh	r2, loopy_t
 	mov	pc, lr
 
-
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@ 
 @@@ $2006 に書く
 @@@ 
@@ -173,26 +193,59 @@ write_2006:
 	tst	REG_P_REST, #P_REST_PPU_TOGGLE
 	eor	REG_P_REST, REG_P_REST, #P_REST_PPU_TOGGLE
 
-	ldrh	r2, loopy_t
 	bne	1f
 	@@ first write
 	@@ t:00111111 00000000=d:00111111
 	@@ t:11000000 00000000=0
-	bic	r2, r2, #0xFF00
-	and	r3, r0, #0x3F
-	orr	r2, r2, r3, lsl #8
-	strh	r2, loopy_t
+	and	r1, r0, #0x3F
+	strh	r1, loopy_t + 1
 	mov	pc, lr
 
 1:	@@ second write
 	@@ t:0000000011111111=d:11111111
 	@@ v=t
-	bic	r2, r2, #0xFF
+	ldrb	r2, loopy_t + 1
 	orr	r2, r2, r0
 	strh	r2, loopy_t
 	strh	r2, loopy_v
 	mov	pc, lr
 
+@@@ 
+@@@ $2007 の読み出し
+@@@ 
+
+read_2007:	
+	ldr	r1, loopy_v
+	tst	REG_P_REST, #P_REST_PPU_32
+	addeq	r3, r1, #1
+	addne	r3, r1, #32
+	str	r3, loopy_v
+	bic	r1, r1, #0xC000
+	adr	r0, 1f
+	b	emu_printf
+
+1:	.string "read 2007 %x\n"
+	ALIGN
+
+@@@ 
+@@@ $2007 に書き込み
+@@@ 
+
+write_2007:	
+	ldr	r1, loopy_v
+	tst	REG_P_REST, #P_REST_PPU_32
+	addeq	r3, r1, #1
+	addne	r3, r1, #32
+	str	r3, loopy_v
+	bic	r1, r1, #0xC000
+	mov	r2, r0
+	adr	r0, 1f
+	b	emu_printf
+	
+1:	.string "write 2007 %x %x\n"
+	ALIGN
+
+#if 0
 
 
 #if 0
@@ -705,6 +758,7 @@ tile_translate_table:
 	.fill	256, 4, 0
 	
 
+#endif
 	SECTION_FAST
 	.globl	read_high_reg
 	.globl	read_save_ram
@@ -714,4 +768,29 @@ read_high_reg:
 read_save_ram:	
 write_high_reg:	
 write_save_ram:	
+	mov	pc, lr
+
+
+	.globl	init_ppu
+init_ppu:
+	mov	pc, lr
+
+	.globl	set_vram_bank_0to7
+set_vram_bank_0to7:	
+	mov	pc, lr
+
+	.globl	ppu_start_frame
+ppu_start_frame:	
+	@ldr	r1, loopy_t
+	@str	r1, loopy_v
+	mov	pc, lr
+
+	.globl	ppu_start_vbl
+	.globl	ppu_end_vbl
+ppu_start_vbl:	
+	orr	REG_P_REST, REG_P_REST, #P_REST_IN_VBL
+	mov	pc, lr
+
+ppu_end_vbl:	
+	bic	REG_P_REST, REG_P_REST, #P_REST_IN_VBL
 	mov	pc, lr

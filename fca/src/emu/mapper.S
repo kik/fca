@@ -88,7 +88,7 @@ init_mapper:
 @@@ assume smb1.nes
 	stmfd	sp!, {lr}
 	bl	set_vram_bank_0to7
-	bl	translate_tiles
+	@bl	translate_tiles
 	ldr	r0, =rom_start
 	ldr	r0, [r0]
 	sub	r0, r0, #0x8000

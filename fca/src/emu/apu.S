@@ -113,45 +113,53 @@ update_square:
 	strne	r4, [r0, #SQ_ENV_VOL]
 2:	
 	@@ スウィープを更新
-	tst	r3, #SQ_REG_SWEEP_ON
-	beq	3f
+	@@ まず新しい波長を計算
 	ldr	r4, [r0, #SQ_SWEEP_SHIFT]
-	teq	r4, #0
-	beq	3f
-	@@ スウィープは有効
-	ldr	r5, [r0, #SQ_SWEEP_COUNT]
-	subs	r5, r5, #1
-	ldrmi	r5, [r0, #SQ_SWEEP_LOAD]
-	str	r5, [r0, #SQ_SWEEP_COUNT]
-	bpl	3f
-	@@ スウィープのカウンタがエクスパイア
 	ldr	r5, [r0, #SQ_FREQ]
 	mov	r4, r5, lsr r4
 	tst	r3, #SQ_REG_SWEEP_INC
 	mvnne	r4, r4
 	add	r5, r5, r4
-	@@ r5 が新しい波長
+
 	@@ 範囲を越えてないかチェック
+	@@ 範囲を越えていれば止める
+#if 1
 	cmp	r5, #8
-	bcc	3f
+	movcc	pc, lr
 	tst	r3, #SQ_REG_SWEEP_INC
-	bne	4f
+	bne	3f
+#if 0
 	ldr	r4, [r0, #SQ_FREQ_LIMIT]
 	cmp	r4, r5
-	bcc	3f
-4:
-	@@ 波長の範囲はよいので保存
-	str	r5, [r0, #SQ_FREQ]
+	movcc	pc, lr
+#else
+	cmp	r5, #0x0800
+	movcs	pc, lr
+#endif
+#endif
 3:	
-	@@ 波長をロード
-	ldr	r4, [r0, #SQ_FREQ]
-	ldr	r5, = freq_table
-	mov	r4, r4, lsl #1
-	ldrh	r2, [r5, r4]
+	@@ スウィープは有効？
+	tst	r3, #SQ_REG_SWEEP_ON
+	beq	4f
+	ldr	r4, [r0, #SQ_SWEEP_SHIFT]
+	teq	r4, #0
+	beq	4f
+	@@ スウィープは有効
+	ldr	r4, [r0, #SQ_SWEEP_COUNT]
+	subs	r4, r4, #1
+	ldrmi	r4, [r0, #SQ_SWEEP_LOAD]
+	str	r4, [r0, #SQ_SWEEP_COUNT]
+	@@ スウィープのカウンタがエクスパイア
+	strmi	r5, [r0, #SQ_FREQ]
+4:	
+	ldr	r5, [r0, #SQ_FREQ]
+	ldr	r4, = freq_table
+	mov	r5, r5, lsl #1
+	ldrh	r2, [r4, r5]
 	@@ ボリュームをロード
 	tst	r3, #SQ_REG_FIXED_ENV
-	ldreq	r1, [r0, #SQ_VOL]
-	ldrne	r1, [r0, #SQ_ENV_VOL]
+	ldrne	r1, [r0, #SQ_VOL]
+	ldreq	r1, [r0, #SQ_ENV_VOL]
 	@@ ボリュームが変化した時はリスタートしないと反映されないようだ
 	ldr	r4, [r0, #SQ_OUT]
 	teq	r4, r1
@@ -162,8 +170,6 @@ update_square:
 	orr	r1, r4, r1, lsl #12
 	
 	mov	pc, lr
-
-
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -196,15 +202,17 @@ do_ch1:
 	tst	r1, #1
 	orreq	r2, r2, #0x8000
 	str	r2, [r0, #GBA_SG11]
+#if 0
 do_ch2:	
 	adr	r0, ch2_reg
 	bl	update_square
 	mov	r0, #GBA_REG_BASE
-	strh	r1, [r0, #GBA_SG20]
+	str	r1, [r0, #GBA_SG20]
 	ldr	r1, [r0, #GBA_SGCNT1]
 	tst	r1, #2
 	orreq	r2, r2, #0x8000
 	str	r2, [r0, #GBA_SG21]
+#endif
 do_ch3:	
 	ldmfd	sp!, {r4, r5, pc}
 
@@ -222,6 +230,8 @@ length_table:
 freq_limit_table:	
 	.long   0x3FF, 0x555, 0x666, 0x71C, 0x787, 0x7C1, 0x7E0, 0x7F0
 
+	.globl	ch1_reg
+	.globl	ch2_reg
 ch1_reg:	.fill	SQ_REG_SZ, 1, 0
 ch2_reg:	.fill	SQ_REG_SZ, 1, 0
 
@@ -432,10 +442,23 @@ write_400F:
 
 	.globl	write_4015
 write_4015:
-	and	r1, r0, #1
+	mov	r2, #GBA_REG_BASE
+	mov	r3, #0
+	ands	r1, r0, #1
+	streq	r3, [r2, #GBA_SG10]
 	str	r1, ch1_reg + SQ_ENB
-	and	r1, r0, #2
+	ands	r1, r0, #2
+	streq	r3, [r2, #GBA_SG11]
 	str	r1, ch2_reg + SQ_ENB
+#if 0
+	mov	r1, r0
+	adr	r0, 1f
+	b	emu_printf
+1:	.string "write 4015 %x\n"
+	ALIGN
+#endif
+	mov	pc, lr
+
 #if 0
 	tst	r0, #0x0F
 	movne	r0, #0x80
@@ -444,17 +467,16 @@ write_4015:
 	strb	r0, [r1, #0x84]
 	@mov	r0, #2
 	@strh	r0, [r1, #0x82]
-#endif
 	mov	pc, lr
+#endif
 
 	.globl	read_4015
 read_4015:	
-#if 1
-	mov	r1, #0x04000000
-	ldrb	r0, [r1, #0x84]
-	and	r0, r0, #0x0F
-#endif
 	mov	r0, #0
+	ldr	r1, ch1_reg + SQ_ENB
+	teq	r1, #0;		orrne	r0, r0, #1
+	ldr	r1, ch2_reg + SQ_ENB
+	teq	r1, #0;		orrne	r0, r0, #2
 	mov	pc, lr
 
 triangle:	

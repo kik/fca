@@ -158,14 +158,22 @@ int_handler:
 	str	r2, [r0, #GBA_IME]
 
 	tst	r1, #GBA_IRQ_VBL
+	ldrne	r0, vbl_count
+	addne	r0, r0, #1
+	strne	r0, vbl_count
 	blne	vbl_handler
 #if 1
 	ldr	r1, [sp]
 	tst	r1, #GBA_IRQ_TIMERn(0)
+	ldrne	r0, timer_count
+	addne	r0, r0, #1
+	strne	r0, timer_count
 	blne	timer0_handler
 #endif
 	ldmfd	sp!, {r1, pc}
 
+timer_count:	.long	0
+vbl_count:	.long	0
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -208,7 +216,7 @@ install_hsync_handler:
 
 current_line:	.long	0
 
-999:	.string "tm count %x %x\n"
+999:	.string "SL %x, E %x, R %x\n"
 	ALIGN
 
 @@@ 
@@ -232,11 +240,15 @@ emulate_frame:
 	@@ Lも押されていればパニック
 	beq	emu_panic
 
+#if 1
+	ldr	r1, = ch1_reg
+	ldr	r3, [r1, #0x00]
+	ldr	r2, [r1, #0x04]
+	ldr	r1, [r1, #0x2C]
 #if 0
-	ldr	r1, =ch1_vol
-	ldr	r1, [r1]
-	ldr	r2, =ch1_env_vol
+	ldr	r2, = ch2_reg
 	ldr	r2, [r2]
+#endif
 	adr	r0, 999b
 	bl	emu_printf
 #endif

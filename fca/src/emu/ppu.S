@@ -1593,10 +1593,9 @@ ppu_end_vbl:
 	.globl	read_high_reg
 read_high_reg:	
 	bic	r1, REG_ADDR, #0x4000
-	teq	r1, #0x16
-	beq	read_4016
-	teq	r1, #0x17
-	beq	read_4017
+	teq	r1, #0x15;	beq	read_4015
+	teq	r1, #0x16;	beq	read_4016
+	teq	r1, #0x17;	beq	read_4017
 	mov	pc, lr
 
 	.globl	write_high_reg

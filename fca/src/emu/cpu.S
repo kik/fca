@@ -357,6 +357,7 @@
 	ZERO_ADDR
 	ZP_READ_ADDR
 	add	REG_ADDR, REG_ADDR, REG_Y
+	bic	REG_ADDR, REG_ADDR, #0x10000
 .endm
 
 
@@ -382,6 +383,7 @@
 .macro	ABSX_ADDR
 	ABS_ADDR
 	add	REG_ADDR, REG_ADDR, REG_X
+	bic	REG_ADDR, REG_ADDR, #0x10000
 .endm
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -389,6 +391,7 @@
 .macro	ABSY_ADDR
 	ABS_ADDR
 	add	REG_ADDR, REG_ADDR, REG_Y
+	bic	REG_ADDR, REG_ADDR, #0x10000
 .endm
 
 
@@ -742,7 +745,7 @@ op99:	@ STA $nnnn, Y
 	WRITE_2; CYCLE_NEXT 5
 
 op81:	@ STA ($nn, X)
-	INDX_ADDR
+	INDX_ADDR; OP_STA
 	WRITE_1; CYCLE_NEXT 6
 	WRITE_2; CYCLE_NEXT 6
 
@@ -1834,6 +1837,7 @@ rom_write_handler:	.long	0
 @@@ Ì¤¼ÂÁõ
 @@@ 
 write_rom_byte:	
+	and	r0, r0, #0xFF
 	ldr	r1, rom_write_handler
 	teq	r1, #0
 	movne	pc, r1

@@ -684,6 +684,7 @@ read_high_reg:
 
 	.globl	write_high_reg
 write_high_reg:	
+	and	r0, r0, #0xFF
 	bic	r1, REG_ADDR, #0x4000
 	cmp	r1, #0x18
 	ldrcc	pc, [pc, r1, lsl #2]

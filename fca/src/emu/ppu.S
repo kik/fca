@@ -31,6 +31,7 @@ read_ppu_reg:
 @@@ 
 	.globl	write_ppu_reg
 write_ppu_reg:	
+	and	r0, r0, #0xFF
 	bic	r1, REG_ADDR, #0x2000
 	cmp	r1, #8
 	ldrcc	pc, [pc, r1, lsl #2]
@@ -269,7 +270,7 @@ ppu_start_frame:
 	stmfd	sp!, {lr}
 	mov	r1, #GBA_REG_BASE
 
-	mov	r0, #0
+	mov	r0, #GBA_DISP_CR_1D_SPR
 	tst	REG_P_REST, #P_REST_DRAW_BG
 	@@ BGを描く場合は BG_0 を有効に
 	orrne	r0, r0, #(GBA_DISP_CR_ENB_BG0 | GBA_DISP_CR_ENB_BG1)
@@ -738,6 +739,7 @@ vbl_handler:
 @@@ 
 	.globl	spr_dma
 spr_dma:	
+	str	REG_P_REST, spr_old
 	stmfd	sp!, {r4, r5, lr}	
 	@@ r0 = DMA src
 	sub	REG_CYCLE, REG_CYCLE, #512
@@ -770,7 +772,7 @@ spr_dma:
 	@@ test priority
 	tst	r3, #0x20 << 16
 	moveq	r4, #0
-	movne	r4, #0x0400
+	movne	r4, #0x0C00
 
 	and	r5, r3, #0x03 << 16
 	orr	r4, r4, r5, lsr #4
@@ -779,8 +781,8 @@ spr_dma:
 	moveq	r5, #0
 	movne	r5, #0x100
 	tst	REG_P_REST, #P_REST_SPR_SZ
-	movne	r5, r3, lsr #16
-	bicne	r3, r3, #0x01 << 24
+	movne	r5, r3
+	bicne	r3, r3, #0x0100
 	and	r5, r5, #0x100
 	orr	r4, r4, r5
 	and	r3, r3, #0xFF00
@@ -812,6 +814,7 @@ write_2003:
 @@@ 
 
 write_2004:
+	str	REG_P_REST, spr_old
 	ldrb	r1, ppu_reg_2003
 	add	r2, r1, #1
 	strb	r2, ppu_reg_2003
@@ -828,16 +831,24 @@ write_2004:
 
 write_spr_0:
 	@@ Spr Y
-	@@ TODO: 変換すること
+	sub	r0, r0, #15
+	add	r0, r0, r0, lsl #1
+	mov	r0, r0, lsr #2
 	strb	r0, [r3]
 	mov	pc, lr
 
 write_spr_1:	
 	@@ Tile #
 	tst	REG_P_REST, #P_REST_SPR_SZ
-	streqb	r0, [r3, #4]
-	moveq	pc, lr
-
+	bne	1f
+	ldrh	r1, [r3, #4]
+	and	r1, r1, #0xFC00
+	orr	r1, r1, r0
+	tst	REG_P_REST, #P_REST_SPR_ADR
+	orrne	r1, r1, #0x100
+	strh	r1, [r3, #4]
+	mov	pc, lr
+1:	
 	@@ 8x16
 	ldrh	r1, [r3, #4]
 	and	r1, r1, #0xFC00
@@ -852,9 +863,10 @@ write_spr_2:
 	@@ Palette, Prio
 	ldrb	r1, [r3, #5]
 	bic	r1, r1, #0xFC
-	orr	r1, r1, r0, lsl #4
+	and	r2, r0, #0x3
+	orr	r1, r1, r2, lsl #4
 	tst	r0, #0x20
-	orrne	r1, r1, #0x04
+	orrne	r1, r1, #0x0C
 	strb	r1, [r3, #5]
 	@@ H flip, V flip
 	ldrb	r1, [r3, #3]
@@ -928,7 +940,7 @@ set_spr_8x16:
 	mov	r2, #64
 1:	
 	ldrh	r1, [r0]
-	orr	r1, r1, #0x4000
+	orr	r1, r1, #0x8000
 	strh	r1, [r0], #4
 	ldrh	r1, [r0]
 	tst	r1, #0x0001
@@ -989,7 +1001,7 @@ init_gba_spr:
 	subs	r1, r1, #1
 	bne	1b
 
-	adr	r0, gba_sprite
+	ldr	r0, =gba_sprite
 	mov	r1, #64
 	@@ Rフラグを立てる
 	mov	r2, #0x0100
@@ -1674,11 +1686,27 @@ read_save_ram:
 write_save_ram:	
 	ldr	r1, = save_ram - 0x6000
 	strb	r0, [r1, REG_ADDR]
+	mov	r1, #0x0E000000
+	sub	r1, r1, #0x6000
+	strb	r0, [r1, REG_ADDR]
 	mov	pc, lr
 
 	.pool
 
 	SECTION_SLOW
 	ALIGN
+
+	.globl	init_save_ram
+init_save_ram:	
+	mov	r0, #0x0E000000
+	adr	r1, save_ram
+	mov	r2, #0x2000
+1:	ldrb	r3, [r0], #1
+	strb	r3, [r1], #1
+	subs	r2, r2, #1
+	bne	1b
+	mov	pc, lr
+
 	.globl	save_ram
 save_ram:	.fill	0x2000, 1, 0
+

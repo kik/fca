@@ -52,6 +52,7 @@ init_emulator:
 	bl	init_cpu
 	bl	init_ppu
 	bl	init_apu
+	bl	init_save_ram
 	bl	init_mapper
 	ldmfd	sp!, {pc}
 

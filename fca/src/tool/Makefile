@@ -1,14 +1,15 @@
-
-CC = gcc
 CFLAGS = -I../include
 
 all: addfile endfile fca-mkfs #nes-dasm selfont
 
 addfile: addfile.c
-	$(CC) -o $@ $< -I../include
+	$(HOSTCC) -o $@ $< -I../include
 
 endfile: endfile.c
-	$(CC) -o $@ $< -I../include
+	$(HOSTCC) -o $@ $< -I../include
+
+fca-mkfs: fca-mkfs.c
+	$(HOSTCC) -o $@ $< -I../include
 
 clean:
-	rm -f addfile endfile
+	rm -f addfile endfile fca-mkfs

@@ -1,0 +1,25 @@
+
+#
+# どこに devkitadvance を置いたか
+# $(DEVKIT_PREFIX)gcc
+# のように実行される
+DEVKIT_PREFIX = /n/tmp/devkitadv/bin/arm-agb-elf-
+
+#
+# ホストで動くバイナリを吐くコンパイラをどこに置いたか
+# $(HOSTCC_PREFIX)gcc
+# のように実行される
+HOSTCC_PREFIX = 
+
+
+HOSTCC = $(HOSTCC_PATH)gcc
+
+LD = $(DEVKIT_PREFIX)ld -m armelf
+
+all:
+	$(MAKE) -f Makefile CROSS_COMPILE=$(DEVKIT_PREFIX) LD="$(LD)" HOSTCC=$(HOSTCC)
+
+clean:
+	$(MAKE) -f Makefile clean CROSS_COMPILE=$(DEVKIT_PREFIX) LD="$(LD)" HOSTCC=$(HOSTCC)
+
+

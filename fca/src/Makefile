@@ -8,6 +8,8 @@ OBJCOPY = $(CROSS_COMPILE)objcopy
 
 HOSTCC = gcc
 
+export HOSTCC CROSS_COMPILE CC AS LD OBJCOPY
+
 CFLAGS = -Iinlcude
 
 OBJ = shell/shells.o emu/emu.o emu/mapper/mappers.o

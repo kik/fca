@@ -97,6 +97,15 @@ usage()
   exit(1);
 }
 
+char *
+my_basename(char *path)
+{
+  char *p = strrchr(path, '/');
+  if (p)
+    return p + 1;
+  return path;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -129,7 +138,7 @@ main(int argc, char **argv)
     char *s = strdup(argv[optind]);
     char *t, *u;
     
-    t = basename(s);
+    t = my_basename(s);
     u = strrchr(s, '.');
     if (u) *u++ = 0;
     else u = "???";

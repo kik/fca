@@ -1,11 +1,3 @@
-CROSS_COMPILE = arm-elf-
-
-CC = $(CROSS_COMPILE)gcc
-AS = $(CROSS_COMPILE)as
-LD = $(CROSS_COMPILE)ld
-OBJCOPY = $(CROSS_COMPILE)objcopy
-
-#CFLAGS = -Iinclude
 
 CPPFLAGS = -I../include -D__ASSEMBLY__
 

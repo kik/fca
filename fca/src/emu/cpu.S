@@ -1632,27 +1632,19 @@ memory_map:
 @@@ ---- --
 @@@ ---- 11
 op00:	@ BRK
-	b	op00
-#if 0
 	IMPLIED
-	ldr	r0, =0xBBBBBBBB
-	mov	r1, r0
-1:	b	1b
-	TRACE_JUMP_B
-	mov	r0, REG_PC, lsr #16
-	bl	push_stack_word
+	ldr	r0, pc_bank
+	sub	r0, REG_PC, r0
+	PUSH_WORD
 	orr	REG_P_REST, REG_P_REST, #P_REST_B_FLAG
-	bl	save_P
-	bl	push_stack_byte
+	SAVE_P
+	PUSH_BYTE
 	orr	REG_P_REST, REG_P_REST, #P_REST_I_FLAG
-	ldr	REG_ADDR, = IRQ_VECTOR
-	bl	read_word
-	orr	r1, r0, REG_PC, lsl #16
-	mov	REG_PC, r1, ror #16
-	TRACE_JUMP_A
-	b	cpu_exec_tail
-	.pool
-#endif
+	mov	REG_ADDR, #0x10000
+	sub	REG_ADDR, REG_ADDR, #IRQ_VECTOR
+	READ_WORD
+	LOAD_PC
+	CYCLE_NEXT	7
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1741,6 +1733,44 @@ set_memory_map_8toE:
 	str	r0, [r1, #12]
 	mov	pc, lr
 
+	.globl	set_memory_map_8
+set_memory_map_8:
+	adr	r1, memory_map + 0x8 * 2
+	str	r0, [r1]
+	mov	pc, lr
+
+	.globl	set_memory_map_A
+set_memory_map_A:
+	adr	r1, memory_map + 0xA * 2
+	str	r0, [r1]
+	mov	pc, lr
+
+	.globl	set_memory_map_C
+set_memory_map_C:
+	adr	r1, memory_map + 0xC * 2
+	str	r0, [r1]
+	mov	pc, lr
+
+	.globl	set_memory_map_E
+set_memory_map_E:
+	adr	r1, memory_map + 0xE * 2
+	str	r0, [r1]
+	mov	pc, lr
+
+	.globl	set_memory_map_8toA
+set_memory_map_8toA:
+	adr	r1, memory_map + 0x8 * 2
+	str	r0, [r1]
+	str	r0, [r1, #4]
+	mov	pc, lr
+
+	.globl	set_memory_map_CtoE
+set_memory_map_CtoE:
+	adr	r1, memory_map + 0xC * 2
+	str	r0, [r1]
+	str	r0, [r1, #4]
+	mov	pc, lr
+
 @@@ 
 @@@ r1 には既にバンク番号がロードされている
 @@@ 
@@ -1765,10 +1795,12 @@ write_rom_byte:
 spr_dma_adr:	
 	movs	r1, r0, lsr #5
 	biceq	r0, r0, #0x18
-	adr	r2, memory_map
+	ldr	r2, =memory_map
 	ldr	r2, [r2, r1, lsl #2]
 	add	r0, r2, r0, lsl #8
 	mov	pc, lr
+
+	.pool
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@	
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@	

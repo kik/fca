@@ -1,4 +1,5 @@
 #include "nes.h"
+#include "struct.h"
 
 //#define CPU_TEST
 
@@ -1640,6 +1641,7 @@ op20:
 memory_map:	
 	.long	nes_internal_ram
 	.long	0, 0, save_ram - 0x6000
+prg_rom_memory_map:
 	.long	0, 0, 0, 0
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1746,59 +1748,75 @@ reset_cpu:
 @@@ メモリ操作
 @@@ 
 
+prg_rom_start:	.long	0
+
 	ALIGN
 	.globl	set_memory_map_8toE
 set_memory_map_8toE:	
-	adr	r1, memory_map + 0x8 * 2
-	str	r0, [r1]
-	str	r0, [r1, #4]
-	str	r0, [r1, #8]
-	str	r0, [r1, #12]
+	ldr	r1, prg_rom_start
+	add	r0, r1, r0, lsl #13
+	sub	r0, r0, #0x8000
+	str	r0, prg_rom_memory_map + 0x0
+	str	r0, prg_rom_memory_map + 0x4
+	str	r0, prg_rom_memory_map + 0x8
+	str	r0, prg_rom_memory_map + 0xC
 	mov	pc, lr
 
 	.globl	set_memory_map_8
 set_memory_map_8:
-	adr	r1, memory_map + 0x8 * 2
-	str	r0, [r1]
+	ldr	r1, prg_rom_start
+	add	r0, r1, r0, lsl #13
+	sub	r0, r0, #0x8000
+	str	r0, prg_rom_memory_map + 0x0
 	mov	pc, lr
 
 	.globl	set_memory_map_A
 set_memory_map_A:
-	adr	r1, memory_map + 0xA * 2
-	str	r0, [r1]
+	ldr	r1, prg_rom_start
+	add	r0, r1, r0, lsl #13
+	sub	r0, r0, #0xA000
+	str	r0, prg_rom_memory_map + 0x4
 	mov	pc, lr
 
 	.globl	set_memory_map_C
 set_memory_map_C:
-	adr	r1, memory_map + 0xC * 2
-	str	r0, [r1]
+	ldr	r1, prg_rom_start
+	add	r0, r1, r0, lsl #13
+	sub	r0, r0, #0xC000
+	str	r0, prg_rom_memory_map + 0x8
 	mov	pc, lr
 
 	.globl	set_memory_map_E
 set_memory_map_E:
-	adr	r1, memory_map + 0xE * 2
-	str	r0, [r1]
+	ldr	r1, prg_rom_start
+	add	r0, r1, r0, lsl #13
+	sub	r0, r0, #0xC000
+	str	r0, prg_rom_memory_map + 0xC
 	mov	pc, lr
 
 	.globl	set_memory_map_8toA
 set_memory_map_8toA:
-	adr	r1, memory_map + 0x8 * 2
-	str	r0, [r1]
-	str	r0, [r1, #4]
+	ldr	r1, prg_rom_start
+	add	r0, r1, r0, lsl #13
+	sub	r0, r0, #0x8000
+	str	r0, prg_rom_memory_map + 0x0
+	str	r0, prg_rom_memory_map + 0x4
 	mov	pc, lr
 
 	.globl	set_memory_map_CtoE
 set_memory_map_CtoE:
-	ldr	r1, =memory_map + 0xC * 2
-	str	r0, [r1]
-	str	r0, [r1, #4]
+	ldr	r1, prg_rom_start
+	add	r0, r1, r0, lsl #13
+	sub	r0, r0, #0xC000
+	str	r0, prg_rom_memory_map + 0x8
+	str	r0, prg_rom_memory_map + 0xC
 	mov	pc, lr
 
 @@@ 
 @@@ r1 には既にバンク番号がロードされている
 @@@ 
 read_rom_byte:	
-	ldr	r0, =memory_map
+	adrl	r0, memory_map
 	ldr	r0, [r0, r1, lsl #2]
 	ldrb	r0, [r0, REG_ADDR]
 	mov	pc, lr
@@ -1806,7 +1824,6 @@ read_rom_byte:
 rom_write_handler:	.long	0
 
 @@@ 
-@@@ 未実装
 @@@ 
 write_rom_byte:	
 	and	r0, r0, #0xFF
@@ -1966,6 +1983,9 @@ nes_stack:
 	.globl	init_cpu
 
 init_cpu:
+	ldr	r0, = prg_rom_start
+	ldopt	r1, EMU_OPT_prg_rom_start
+	str	r1, [r0]
 	mov	REG_A, #0
 	mov	REG_X, #0
 	mov	REG_Y, #0

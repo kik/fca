@@ -33,38 +33,19 @@ reset_mapper:
 	bne	2f
 
 	@@ 1 bank
-	ldopt	r0, EMU_OPT_prg_rom_start
-	sub	r0, r0, #0x8000
-	bl	set_memory_map_8
-
-	ldopt	r0, EMU_OPT_prg_rom_start
-	sub	r0, r0, #0xA000
-	bl	set_memory_map_A
-
-	ldopt	r0, EMU_OPT_prg_rom_start
-	sub	r0, r0, #0xC000
-	bl	set_memory_map_C
-
-	ldopt	r0, EMU_OPT_prg_rom_start
-	sub	r0, r0, #0xE000
-	bl	set_memory_map_E
+	mov	r0, #0;	bl	set_memory_map_8
+	mov	r0, #0;	bl	set_memory_map_A
+	mov	r0, #0;	bl	set_memory_map_C
+	mov	r0, #0;	bl	set_memory_map_E
 	b	3f
 1:	
 	@@ 2 banks
-	ldopt	r0, EMU_OPT_prg_rom_start
-	sub	r0, r0, #0x8000
-	bl	set_memory_map_8toA
-
-	ldopt	r0, EMU_OPT_prg_rom_start
-	sub	r0, r0, #0xC000
-	bl	set_memory_map_CtoE
+	mov	r0, #0;	bl	set_memory_map_8toA
+	mov	r0, #0;	bl	set_memory_map_CtoE
 	b	3f
 2:	
 	@@ >2 banks
-	ldopt	r0, EMU_OPT_prg_rom_start
-	sub	r0, r0, #0x8000
-	bl	set_memory_map_8toE
-
+	mov	r0, #0;	bl	set_memory_map_8toE
 3:	
 	ldopt	r0, EMU_OPT_scroll_type
 	adr	lr, 4f

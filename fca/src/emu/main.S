@@ -232,12 +232,14 @@ emulate_frame:
 	@@ Lも押されていればパニック
 	beq	emu_panic
 
-	ldr	r1, =ch1_freq
+#if 0
+	ldr	r1, =ch1_vol
 	ldr	r1, [r1]
-	ldr	r2, =ch1_length
+	ldr	r2, =ch1_env_vol
 	ldr	r2, [r2]
 	adr	r0, 999b
 	bl	emu_printf
+#endif
 	mov	r0, #GBA_REG_BASE
 
 	mov	r2, #GBA_DISP_CR_ENB_BG3

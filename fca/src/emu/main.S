@@ -253,9 +253,13 @@ emulate_frame:
 	mov	r0, #GBA_REG_BASE
 	ldr	r1, [r0, #GBA_KEY]
 	tst	r1, #GBA_KEY_L
-	bne	1f
+	bne	2f
 	bl	enter_L_menu
 	ldmnefd	sp!, {pc}
+	b	1f
+2:	
+	tst	r1, #GBA_KEY_R
+	bleq	enter_R_shortcut
 
 1:	
 	@@ 
@@ -412,3 +416,16 @@ enter_L_menu:
 	ldmfd	sp!, {ip, pc}
 
 	.pool
+
+enter_R_shortcut:	
+#if 0
+	stmfd	sp!, {lr}
+	mov	r1, #GBA_REG_BASE
+	mvn	r3,
+	ldr	r0, [r1, #GBA_KEY]
+	add	r2, r0, #1
+	teq	r2, #GBA_KEY_ALL
+	ldmeqfd	sp!, {pc}
+
+	teq	r0, #GBA_KEY_A
+#endif

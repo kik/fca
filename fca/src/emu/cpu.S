@@ -1390,21 +1390,19 @@ op5E:	@ LSR $nnnn, X
 .endm
 
 .macro	OP_ROR
-	and	r1, REG_P_REST, #P_REST_C_FLAG
-	mov	r1, r1, lsl #7
-	orrs	r0, r1, r0, lsr #1
-	mov	REG_NZ, r0, lsl #24
-	mov	REG_NZ, REG_NZ, asr #24
+	mov	r1, REG_P_REST, lsl #31
+	orr	r0, r1, r0, lsl #23
+	movs	REG_NZ, r0, asr #24
+	and	r0, REG_NZ, #0xFF
 	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm
 
 .macro	OP_ROR_A
-	and	r1, REG_P_REST, #P_REST_C_FLAG
-	mov	r1, r1, lsl #7
-	orrs	REG_A, r1, REG_A, lsr #25
-	mov	REG_A, REG_A, lsl #24
-	mov	REG_NZ, REG_A, asr #24
+	mov	r1, REG_P_REST, lsl #31
+	orr	REG_A, r1, REG_A, lsr #1
+	movs	REG_NZ, REG_A, asr #24
+	mov	REG_A, REG_NZ, lsl #24
 	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm
@@ -1637,7 +1635,7 @@ jmp_indirect_bug:
 op4C:	
 	ABS_ADDR
 	mov	r0, REG_ADDR
-	mov	r3, REG_PC
+	sub	r3, REG_PC, #3
 	LOAD_PC
 	teq	r3, REG_PC
 	moveq	REG_CYCLE, #0	

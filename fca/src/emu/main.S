@@ -241,6 +241,8 @@ current_line:	.long	0
 999:	.string "ch5 %x\n"
 	ALIGN
 
+#define CYCLES_PER_LINE 114
+
 @@@ 
 @@@ メインループ
 @@@ 
@@ -264,7 +266,7 @@ emulate_frame:
 
 1:	
 	@@ 0-239
-	add	REG_CYCLE, REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #CYCLES_PER_LINE
 	bl	cpu_exec
 	DMC_IRQ	
 
@@ -288,19 +290,19 @@ emulate_frame:
 	orreq	REG_P_REST, REG_P_REST, #P_REST_INT_PENDING
 
 	@@ 240
-	add	REG_CYCLE, REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #CYCLES_PER_LINE
 	bl	cpu_exec
 	DMC_IRQ	
 	mov	r0, #240
 	HSYNC
 	@@ 241
-	add	REG_CYCLE, REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #CYCLES_PER_LINE
 	bl	cpu_exec
 	DMC_IRQ	
 	mov	r0, #241
 	HSYNC
 	@@ 242
-	add	REG_CYCLE, REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #CYCLES_PER_LINE
 	bl	cpu_exec
 	DMC_IRQ	
 	mov	r0, #242
@@ -313,7 +315,7 @@ emulate_frame:
 	DMC_IRQ	
 	tst	REG_P_REST, #P_REST_ENB_NMI
 	orrne	REG_P_REST, REG_P_REST, #P_REST_NMI_PENDING
-	add	REG_CYCLE, REG_CYCLE, #112
+	add	REG_CYCLE, REG_CYCLE, #CYCLES_PER_LINE - 1
 	bl	cpu_exec
 	DMC_IRQ	
 	mov	r0, #243
@@ -323,7 +325,7 @@ emulate_frame:
 	mov	r0, #244
 	str	r0, current_line
 1:	
-	add	REG_CYCLE, REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #CYCLES_PER_LINE
 	bl	cpu_exec
 	DMC_IRQ	
 
@@ -340,7 +342,7 @@ emulate_frame:
 
 	@@ 262
 	bl	ppu_end_vbl
-	add	REG_CYCLE, REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #CYCLES_PER_LINE
 	bl	cpu_exec
 	DMC_IRQ	
 	mov	r0, #6
@@ -348,7 +350,7 @@ emulate_frame:
 	HSYNC
 
 	@@ 262.5
-	add	REG_CYCLE, REG_CYCLE, #56
+	add	REG_CYCLE, REG_CYCLE, #CYCLES_PER_LINE / 2
 	bl	cpu_exec
 	DMC_IRQ	
 

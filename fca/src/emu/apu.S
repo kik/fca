@@ -192,7 +192,7 @@ update_triangle:
 	ldr	r3, [r0, #TR_ENB]
 	teq	r3, #0
 	moveq	pc, lr
-#if 0
+#if 1
 	ldr	r4, [r0, #TR_LEN]
 	teq	r4, #0
 	moveq	pc, lr
@@ -883,8 +883,8 @@ freq_table:
 	.globl	read_high_reg
 read_high_reg:	
 	bic	r1, REG_ADDR, #0x4000
-	teq	r1, #0x15;	beq	read_4015
 	teq	r1, #0x16;	beq	read_4016
+	teq	r1, #0x15;	beq	read_4015
 	teq	r1, #0x17;	beq	read_4017
 	mov	r0, #0x40
 	mov	pc, lr

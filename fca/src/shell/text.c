@@ -4,6 +4,8 @@
 #include "file.h"
 
 #if 0
+
+#if 0
 #define NO_TEXT
 #endif
 
@@ -17,7 +19,7 @@ init_text_console(int bkg, int tile, int map)
   int i;
   unsigned short *p;
 
-  font_data = find_file("font.dat", 0);
+  font_data = open_file("font", "dat", 0);
   if (! font_data) {
     return -1;
   }
@@ -190,4 +192,17 @@ printf(char *fmt, ...)
     }
   }
   va_end(va);
+}
+#endif
+
+
+int
+init_text_console(int bkg, int tile, int map)
+{
+  return 0;
+}
+
+void
+printf(char *fmt, ...)
+{
 }

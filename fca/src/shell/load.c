@@ -42,7 +42,7 @@ load_emulator(void *nes_file)
   struct file f;
 
   //show_nes_header(nes_file);
-  p = find_file("emu.bin", &f);
+  p = open_file("emu", "bin", &f);
   if (!p) {
     printf("can't find emu.bin\n");
     return;
@@ -50,7 +50,7 @@ load_emulator(void *nes_file)
   printf("load emu.bin\n %x -> %x\n", p, &_emu_start);
   memcpy(&_emu_start, p, f.length);
 
-  p = find_file("emuslow.bin", &f);
+  p = open_file("emuslow", "bin", &f);
   if (!p) {
     printf("can't find emuslow.bin\n");
     return;
@@ -58,11 +58,13 @@ load_emulator(void *nes_file)
   printf("load emuslow.bin\n %x -> %x\n", p, &_emu_slow_start);
   memcpy(&_emu_slow_start, p, f.length);
 
-  p = find_file("test.sav", &f);
+#if 0
+  p = open_file("test", "sav", &f);
   {
     extern void *_save_data;
     _save_data = p;
   }
+#endif
 }
 
 
@@ -83,11 +85,11 @@ struct mapper {
 };
 
 static struct mapper mapper_list[] = {
-  {0, "mapper0.bin"},
-  {1, "mapper1.bin"},
-  {2, "mapper2.bin"},
-  {3, "mapper3.bin"},
-  {4, "mapper4.bin"},
+  {0, "mapper0"},
+  {1, "mapper1"},
+  {2, "mapper2"},
+  {3, "mapper3"},
+  {4, "mapper4"},
   {0, 0}
 };
 
@@ -142,7 +144,7 @@ load_mapper(void *nes_file)
     while (1);
   }
 
-  q = find_file(mapper_list[i].file, &mapper_file);
+  q = open_file(mapper_list[i].file, "bin", &mapper_file);
   if (!q) {
     printf("%s: not found\n", mapper_list[i].file);
     while (1);
@@ -175,7 +177,7 @@ compare_memory()
   int i, j;
 
   //show_nes_header(nes_file);
-  p = find_file("emu.bin", &f);
+  p = open_file("emu", "bin", &f);
   q = &_emu_start;
 
   for (i = 0; i < f.length;) {

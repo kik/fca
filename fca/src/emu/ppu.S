@@ -272,7 +272,8 @@ ppu_start_frame:
 	tst	REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
 	@@ BGもSPRも描かない場合は画面をブランクにする
 	@@ 白くなってしまうのでなんとかしないと
-	orreq	r0, r0, #GBA_DISP_CR_BLANK
+	@orreq	r0, r0, #GBA_DISP_CR_BLANK
+	@@ これだと背景色でぬりつぶされるがまあいいだろう
 
 	strh	r0, [r1, #GBA_DISP_CR]
 	@@ BGもSPRも描かないならここでおわり
@@ -711,7 +712,10 @@ read_save_ram:
 write_save_ram:	
 	ldr	r1, = save_ram - 0x6000
 	strb	r0, [r1, REG_ADDR]
-	mov	r1, #0x0E000000
+	ldr	r1, =_save_data_write
+	ldr	r1, [r1]
+	teq	r1, #0
+	moveq	pc, lr
 	sub	r1, r1, #0x6000
 	strb	r0, [r1, REG_ADDR]
 	mov	pc, lr
@@ -721,24 +725,17 @@ write_save_ram:
 	SECTION_SLOW
 	ALIGN
 
-	.globl	_save_data
-_save_data:	.long	0
+	.globl	_save_data_read
+	.globl	_save_data_write
+_save_data_read:	.long	0
+_save_data_write:	.long	0
 
 	.globl	init_save_ram
 init_save_ram:
-	ldr	r0, _save_data
+	ldr	r0, _save_data_read
 	teq	r0, #0
-	beq	2f	
-	mov	r1, #0x0E000000
-	mov	r2, #0x2000
-1:	
-	ldrb	r3, [r0], #1
-	strb	r3, [r1], #1
-	subs	r2, r2, #1
-	bne	1b
-	@mov	pc, lr
-2:	
-	mov	r0, #0x0E000000
+	moveq	pc, lr
+
 	adr	r1, save_ram
 	mov	r2, #0x2000
 1:	ldrb	r3, [r0], #1

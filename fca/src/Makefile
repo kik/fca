@@ -10,15 +10,14 @@ HOSTCC = gcc
 
 CFLAGS = -Iinlcude
 
-OBJ = shell/crt0.o shell/shell.o shell/text.o shell/lib.o shell/file.o \
-      shell/load.o shell/disass.o \
-      emu/main.o emu/cpu.o emu/mapper.o emu/ppu.o emu/ppu-map.o \
-      emu/ppu-palette.o emu/ppu-spr.o emu/ppu-tile.o emu/pad.o emu/apu.o \
-      emu/mapper/mapper0.o
+OBJ = shell/shells.o emu/emu.o emu/mapper/mapper0.o
 
 MAPPER = mapper0.bin mapper1.bin mapper2.bin mapper3.bin mapper4.bin
 
 all: shell.gba
+
+font: subdir
+	./tool/selfont <data/font.dat.src >data/font.dat
 
 shell.elf: subdir
 	$(LD) -o $@ $(OBJ) -T shell.lds -Map shell.map
@@ -35,7 +34,7 @@ emuslow.bin: shell.elf
 $(MAPPER): shell.elf
 	$(OBJCOPY) -O binary $< $@ -j $(@:.bin=)
 
-shell.gba: shell.bin emu.bin emuslow.bin $(MAPPER)
+shell.gba: shell.bin emu.bin emuslow.bin $(MAPPER) font
 	cp shell.bin shell.gba
 	./tool/addfile emu.bin		emu.bin		>>shell.gba
 	./tool/addfile emuslow.bin	emuslow.bin	>>shell.gba

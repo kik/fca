@@ -16,7 +16,10 @@ OBJ = $(SRC:.S=.o)
 
 SUBDIR = mapper
 
-all: $(OBJ) $(SUBDIR)
+all: emu.o $(SUBDIR)
+
+emu.o: $(OBJ)
+	$(LD) -r -o $@ $^
 
 .PHONY: $(SUBDIR)
 

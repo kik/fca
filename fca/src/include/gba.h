@@ -26,4 +26,12 @@ extern unsigned short _sprite[0x200];
 
 extern volatile unsigned short _ioreg[0x181];
 
+#define RGB(r, g, b) ((b) << 10 | (g) << 5 | (r))
+
+extern inline void
+write_palette(int n, short c)
+{
+  _palette[n] = c;
+}
+
 #endif

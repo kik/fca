@@ -1,7 +1,8 @@
 
 CC = gcc
+CFLAGS = -I../include
 
-all: addfile endfile nes-dasm
+all: addfile endfile nes-dasm selfont
 
 addfile: addfile.c
 	$(CC) -o $@ $< -I../include

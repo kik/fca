@@ -104,10 +104,10 @@ load_mapper(void *nes_file)
 
   if (h->rom_ctl_1 & NES_ROM_FOUR_SCREEN) {
     printf("Four screen\n");
-    scroll_type = 4;
+    scroll_type = 2;
   } else if (h->rom_ctl_1 & NES_ROM_VERTICAL_MIRRORING) {
     printf("Vertical mirroring\n");
-    scroll_type = 2;
+    scroll_type = 0;
   } else {
     printf("horizontal mirroring\n");
     scroll_type = 1;

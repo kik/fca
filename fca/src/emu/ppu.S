@@ -473,7 +473,8 @@ draw_line:
 	str	r2, [r1, r0, lsl #3]
 
 	adr	r1, bg_cr_value
-	mov	r2, #(GBA_BG_CR_SIZE_512x256 | GBA_BG_CR_MAP_ADDR(0x4))
+	ldr	r2, screen_size
+	orr	r2, r2, #GBA_BG_CR_MAP_ADDR(0x4)
 	tst	REG_P_REST, #P_REST_BG_ADR
 	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
 	add	r1, r1, r0, lsl #2
@@ -503,7 +504,8 @@ draw_line:
 	str	r2, [r1, #4]
 
 	adr	r1, bg_cr_value
-	mov	r2, #(GBA_BG_CR_SIZE_512x256 | GBA_BG_CR_MAP_ADDR(0x4))
+	ldr	r2, screen_size
+	orr	r2, r2, #GBA_BG_CR_MAP_ADDR(0x4)
 	tst	REG_P_REST, #P_REST_BG_ADR
 	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
 	orr	r2, r2, r2, lsl #16
@@ -527,7 +529,8 @@ draw_line:
 	str	r2, [r1, r0, lsl #3]
 
 	adr	r1, bg_cr_value + 2
-	mov	r2, #(GBA_BG_CR_SIZE_512x256 | GBA_BG_CR_MAP_ADDR(0x4))
+	ldr	r2, screen_size
+	orr	r2, r2, #GBA_BG_CR_MAP_ADDR(0x4)
 	tst	REG_P_REST, #P_REST_BG_ADR
 	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
 	add	r1, r1, r0, lsl #2
@@ -560,7 +563,8 @@ draw_line:
 	str	r2, [r1, r0, lsl #3]
 
 	adr	r1, bg_cr_value + 2
-	mov	r2, #(GBA_BG_CR_SIZE_512x256 | GBA_BG_CR_MAP_ADDR(0x4))
+	ldr	r2, screen_size
+	orr	r2, r2, #GBA_BG_CR_MAP_ADDR(0x4)
 	tst	REG_P_REST, #P_REST_BG_ADR
 	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
 	add	r1, r1, r0, lsl #2
@@ -581,6 +585,9 @@ bg_cr_value:
 
 scroll_value:	
 	.fill	160, 8, 0
+
+screen_size:	
+	.long	0
 
 	ALIGN
 
@@ -1392,7 +1399,56 @@ map_table_map:
 	.long	0x06003000
 	.long	0x06003800
 
+
 	ALIGN
+
+	.globl	set_v_scroll
+	.globl	set_h_scroll
+	.globl	set_4_scroll
+
+set_h_scroll:	
+	mov	r0, #GBA_BG_CR_SIZE_512x256
+	str	r0, screen_size
+
+	mov	r0, #0x06000000
+	adr	r1, map_table_map
+	add	r0, r0, #0x2000
+	str	r0, [r1]
+	str	r0, [r1, #8]
+	add	r0, r0, #0x800
+	str	r0, [r1, #4]
+	str	r0, [r1, #12]
+	mov	pc, lr
+
+set_v_scroll:	
+	mov	r0, #GBA_BG_CR_SIZE_256x512
+	str	r0, screen_size
+
+	mov	r0, #0x06000000
+	adr	r1, map_table_map
+	add	r0, r0, #0x2000
+	str	r0, [r1]
+	str	r0, [r1, #4]
+	add	r0, r0, #0x800
+	str	r0, [r1, #8]
+	str	r0, [r1, #12]
+	mov	pc, lr
+
+set_4_scroll:	
+	mov	r0, #GBA_BG_CR_SIZE_512x512
+	str	r0, screen_size
+
+	mov	r0, #0x06000000
+	adr	r1, map_table_map
+	add	r0, r0, #0x2000
+	str	r0, [r1]
+	add	r0, r0, #0x800
+	str	r0, [r1, #4]
+	add	r0, r0, #0x800
+	str	r0, [r1, #8]
+	add	r0, r0, #0x800
+	str	r0, [r1, #12]
+	mov	pc, lr
 
 @@@ 
 @@@ $2007経由でマップまたは属性を読む
@@ -1556,20 +1612,6 @@ write_attr:
 	str	lr, [r3, #196]
 
 	ldmfd	sp!, {r4, pc}
-
-	ALIGN
-attr_table:
-	.fill	0x40, 1, 0
-	.fill	0x40, 1, 0
-	.fill	0x40, 1, 0
-	.fill	0x40, 1, 0
-	ALIGN
-attr_map:
-	.long	attr_table
-	.long	attr_table + 0x40
-	.long	attr_table + 0x80
-	.long	attr_table + 0xC0
-	ALIGN
 
 @@@ 
 @@@ 属性を適用するマップの左上の端のアドレス

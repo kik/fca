@@ -68,5 +68,15 @@ init_mapper:
 	bl	set_memory_map_8toE
 
 3:	
+	ldr	r0, scroll_type
+	teq	r0, #0
+	bleq	set_h_scroll
+	ldr	r0, scroll_type
+	teq	r0, #1
+	bleq	set_v_scroll
+	ldr	r0, scroll_type
+	teq	r0, #2
+	bleq	set_4_scroll
+
 	bl	_start_mapper
 	ldmfd	sp!, {pc}

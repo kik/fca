@@ -187,6 +187,9 @@ m4_write_8001:
 	b	m4_set_cpu_banks
 
 m4_write_A000:
+	tst	r0, #1
+	bne	set_v_scroll
+	b	set_h_scroll
 	mov	pc, lr
 m4_write_A001:
 	mov	pc, lr

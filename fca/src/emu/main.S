@@ -62,11 +62,26 @@ emulator_entry:
 init_emulator:	
 	stmfd	sp!, {r0, lr}
 	bl	init_cpu
-	@bl	init_memory
-	bl	init_ppu
-	ldmfd	sp!, {r0, lr}
-	b	init_mapper
 
+	adr	r0, 1f
+	bl	emu_printf
+
+	bl	init_ppu
+
+	adr	r0, 2f
+	bl	emu_printf
+
+	ldmfd	sp!, {r0}
+	bl	init_mapper
+
+	adr	r0, 3f
+	bl	emu_printf
+
+	ldmfd	sp!, {pc}
+1:	.string "init cpu\n"
+2:	.string "init ppu\n"
+3:	.string "init mapper\n"
+	ALIGN
 
 @@@ 
 @@@ for debug
@@ -105,6 +120,7 @@ int_handler:
 
 run_emulator:	
 	stmfd	sp!, {lr}
+#if 0
 	mov	r0, #0x04000000
 	adr	r1, int_handler
 	str	r1, [r0, #-4]
@@ -114,6 +130,7 @@ run_emulator:
 	add	r0, r0, #0x200
 	strh	r1, [r0]
 	strh	r1, [r0, #8]
+#endif
 	bl	cpu_reset
 emulate_frame:	
 	bl	ppu_start_frame
@@ -122,7 +139,7 @@ emulate_frame:
 	str	r0, vbl_count
 1:	
 	str	r0, current_line
-	mov	REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
 	@@ Hsync
 	@@ draw line
@@ -133,28 +150,28 @@ emulate_frame:
 	bcc	1b
 
 	@@ 240
-	mov	REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
 	@@ 241
-	mov	REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
 	@@ 242
-	mov	REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
 
 	@@ 243 vbl start
 	bl	ppu_start_vbl
-	mov	REG_CYCLE, #1
+	add	REG_CYCLE, REG_CYCLE, #1
 	bl	cpu_exec
 	tst	REG_P_REST, #P_REST_ENB_NMI
 	orrne	REG_P_REST, REG_P_REST, #P_REST_NMI_PENDING
-	mov	REG_CYCLE, #112
+	add	REG_CYCLE, REG_CYCLE, #112
 	bl	cpu_exec
 
 	@@ 244..261
 	mov	r0, #0
 1:	str	r0, current_line
-	mov	REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
 	ldr	r0, current_line
 	add	r0, r0, #1
@@ -163,11 +180,11 @@ emulate_frame:
 
 	@@ 262
 	bl	ppu_end_vbl
-	mov	REG_CYCLE, #113
+	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
 
 	@@ 262.5
-	mov	REG_CYCLE, #56
+	add	REG_CYCLE, REG_CYCLE, #56
 	bl	cpu_exec
 
 	b	emulate_frame

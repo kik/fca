@@ -1306,14 +1306,36 @@ write_save_ram:
 
 	.globl	init_ppu
 init_ppu:
+	@@ 画面を消す
+	mov	r0, #0x0080
+	mov	r1, #0x04000000
+	str	r0, [r1]
+
 	b	init_tile_trans_table
 	mov	pc, lr
 
 
 	.globl	ppu_start_frame
-ppu_start_frame:	
+ppu_start_frame:
+#if 1
+	mov	r1, #0x04000000
+
+	mov	r0, #0
+	tst	REG_P_REST, #P_REST_DRAW_BG
+	orrne	r0, r0, #0x0100
+#endif
 	tst	REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
+	orreq	r0, r0, #0x80
+	str	r0, [r1]
 	moveq	pc, lr
+#if 1
+	mov	r0, #0x0400
+
+	tst	REG_P_REST, #P_REST_BG_ADR
+	orrne	r0, r0, #0x0004
+
+	str	r0, [r1, #0x8]
+#endif
 	ldr	r1, loopy_t
 	str	r1, loopy_v
 	mov	pc, lr

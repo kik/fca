@@ -310,9 +310,11 @@
 @@@ $nnnn
 
 .macro	ABS_ADDR
-	ldrb	REG_ADDR, [REG_PC], #1
-	ldrb	r0, [REG_PC], #1
-	orr	REG_ADDR, REG_ADDR, r0, lsl #8
+	tst	REG_PC, #1
+	ldreqh	REG_ADDR, [REG_PC], #2
+	ldrneb	REG_ADDR, [REG_PC], #1
+	ldrneb	r0, [REG_PC], #1
+	orrne	REG_ADDR, REG_ADDR, r0, lsl #8
 .endm
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1836,6 +1838,7 @@ init_cpu:
 	mov	REG_X, #0
 	mov	REG_Y, #0
 	mov	REG_S, #0xFF << 24
+	mov	REG_CYCLE, #0
 	mov	pc, lr
 
 	.pool

@@ -262,6 +262,7 @@ emulate_frame:
 	@@ フレームの開始
 	@@ 
 	bl	sync_gba_vbl
+	bl	read_pad
 
 	mov	r0, #0
 	str	r0, current_line

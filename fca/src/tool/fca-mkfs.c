@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #define FILE_MAGIC     0x04174170
 #define FILE_END_MAGIC 0x41700417
@@ -89,6 +90,19 @@ end(FILE *out)
   fwrite(&file, sizeof file, 1, out);
 }
 
+char *bindir(char *file)
+{
+  static char buf[PATH_MAX];
+  char *path;
+
+  path = getenv("FCABINDIR");
+  if (!path) path = ".";
+
+  sprintf(buf, "%s/%s", path, file);
+
+  return buf;
+}
+
 char *system_files[] = {
   "emu.bin",     "emu",     "bin",
   "emuslow.bin", "emuslow", "bin",
@@ -118,9 +132,10 @@ main(int argc, char **argv)
     exit(1);
   }
   
-  copy_file(out, "shell.bin");
+  copy_file(out, bindir("shell.bin"));
   for (i = 0; system_files[i]; i += 3)
-    add_file(out, system_files[i], system_files[i + 1], system_files[i + 2]);
+    add_file(out, bindir(system_files[i]), system_files[i + 1],
+	     system_files[i + 2]);
 
   for (i = 2; i < argc; i++) {
     char *s = strdup(argv[i]);

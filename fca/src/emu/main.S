@@ -68,7 +68,6 @@ init_emulator:
 	.globl	emu_printf
 
 emu_printf:	
-	@mov	pc, lr
 	stmfd	sp!, {r0-r12,lr}
 	adr	lr, 1f
 	ldr	pc, =printf
@@ -94,8 +93,12 @@ int_handler:
 	stmfd	sp!, {lr}
 	mov	r0, #0x04000000
 	add	r0, r0, #0x200
+
 	ldrh	r1, [r0, #2]
 	strh	r1, [r0, #2]
+
+	mov	r2, #1
+	strh	r2, [r0]
 
 	tst	r1, #1
 	blne	vbl_handler
@@ -113,6 +116,7 @@ run_emulator:
 	mov	r1, #1
 	add	r0, r0, #0x200
 	strh	r1, [r0]
+	strh	r1, [r0, #2]
 	strh	r1, [r0, #8]
 #endif
 	bl	cpu_reset

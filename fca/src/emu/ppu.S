@@ -786,7 +786,10 @@ init_ppu:
 	@@ 画面を消す
 	mov	r0, #0x0080
 	mov	r1, #0x04000000
-	str	r0, [r1]
+	strh	r0, [r1]
+	@@ VBL 割り込みを有効に
+	mov	r0, #0x0008
+	strh	r0, [r1, #4]
 
 	b	init_tile_trans_table
 	mov	pc, lr
@@ -803,7 +806,7 @@ ppu_start_frame:
 #endif
 	tst	REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
 	orreq	r0, r0, #0x80
-	str	r0, [r1]
+	strh	r0, [r1]
 	moveq	pc, lr
 #if 1
 	mov	r0, #0x0400
@@ -811,7 +814,7 @@ ppu_start_frame:
 	tst	REG_P_REST, #P_REST_BG_ADR
 	orrne	r0, r0, #0x0004
 
-	str	r0, [r1, #0x8]
+	strh	r0, [r1, #0x8]
 #endif
 	ldr	r1, loopy_t
 	str	r1, loopy_v
@@ -828,11 +831,53 @@ ppu_end_vbl:
 	bic	REG_P_REST, REG_P_REST, #(P_REST_IN_VBL | P_REST_SPR_HIT)
 	mov	pc, lr
 
+scr:	.long	0
 
 	.globl	vbl_handler
 vbl_handler:	
+	mov	r0, #0x04000000
+
+	mov	r1, #0x8
+	strh	r1, [r0, #0x12]
+
+	@@ DMA stop
+	mov	r1, #0
+	strh	r1, [r0, #0xBA]
+
+	adr	r1, scroll_test + 2
+	@@ DMA Ctrl
+	strh	r1, [r0, #0xBA]	
+	@@ DMA SRC
+	str	r1, [r0, #0xB0]
+	@@ BG0_Y
+	add	r1, r0, #0x12	
+	@@ DMA DST
+	str	r1, [r0, #0xB4]
+	mov	r1, #1
+	@@ DMA Count
+	strh	r1, [r0, #0xB8]
+	@@ DST:	fixed
+	@@ SRC:	inc
+	mov	r1, #0x40 @| 0x180
+	@@ Width: hword
+	@@ Repeat
+	@@ HBlank
+	orr	r1, r1, #0x8000 | 0x2000 | 0x0200
+	@@ DMA Ctrl
+	strh	r1, [r0, #0xBA]	
 	mov	pc, lr
 
+scroll_test:	
+	@@ skip 0
+#define P(n) n, n, n, n + 1, n + 1, n + 1
+	.short	P( 8), P(10), P(12), P(14)@ 1-4
+	.short	P(16), P(18), P(20), P(22)@ 5-8
+	.short	P(24), P(26), P(28), P(30)@ 9-12
+	.short	P(32), P(34), P(36), P(38)@ 13-16
+	.short	P(40), P(42), P(44), P(46)@ 17-20
+	.short	P(48), P(50), P(52), P(54)@ 21-24
+	.short	P(56), P(58), P(60), P(62)@ 25-28
+	.short	P(64), P(66), P(68), P(70)@ 29-32
 
 	.globl	read_high_reg
 	.globl	read_save_ram

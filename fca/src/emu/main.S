@@ -59,6 +59,7 @@ init_emulator:
 	stmfd	sp!, {r0, lr}
 	bl	init_cpu
 	bl	init_ppu
+	bl	init_apu
 	ldmfd	sp!, {r0, lr}
 	b	init_mapper
 

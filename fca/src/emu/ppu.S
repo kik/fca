@@ -1536,21 +1536,34 @@ read_high_reg:
 	.globl	write_high_reg
 write_high_reg:	
 	bic	r1, REG_ADDR, #0x4000
-	teq	r1, #0x14
-	beq	write_4014
-	teq	r1, #0x16
-	beq	write_4016
-	teq	r1, #0x17
-	beq	write_4017
+	teq	r1, #0x00;	beq	write_4000
+	teq	r1, #0x01;	beq	write_4001
+	teq	r1, #0x02;	beq	write_4002
+	teq	r1, #0x03;	beq	write_4003
+	teq	r1, #0x04;	beq	write_4004
+	teq	r1, #0x05;	beq	write_4005
+	teq	r1, #0x06;	beq	write_4006
+	teq	r1, #0x07;	beq	write_4007
+	teq	r1, #0x08;	beq	write_4008
+	teq	r1, #0x09;	beq	write_4009
+	teq	r1, #0x0A;	beq	write_400A
+	teq	r1, #0x0B;	beq	write_400B
+	teq	r1, #0x14;	beq	write_4014
+	teq	r1, #0x15;	beq	write_4015
+	teq	r1, #0x16;	beq	write_4016
+	teq	r1, #0x17;	beq	write_4017
 	mov	pc, lr
 
 write_4017:	
+	mov	pc, lr
+#if 0
 	mov	r1, r0
 	adr	r0, 1f
 	b	emu_printf
 
 1:	.string "write 4017 %x\n"
 	ALIGN
+#endif
 
 	.globl	read_save_ram
 	.globl	write_save_ram

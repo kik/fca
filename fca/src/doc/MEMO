@@ -1,0 +1,62 @@
+
+GBA で動く NES エミュレータのメモ
+
+Nesterj を元にして書くが，そのままだと重いので書き直さなければならない。
+
+
+
+NES メモリマップ
+
+CPU
+場所        種類  R     W      注意
+0000-0800   RAM   通常  通常   2KB
+0800-1000   RAM   通常  通常   0000-0800 のミラー
+1000-1800   RAM   通常  通常   0000-0800 のミラー
+1800-2000   RAM   通常  通常   0000-0800 のミラー
+2000        Reg    ×   I/O    PPU Control Register #1
+2001        Reg    ×   I/O    PPU Control Register #2
+2002        Reg   I/O    ×    PPU Status Register
+2003        Reg    ×   I/O    SPR-RAM Address Register
+2004        Reg    ×   I/O    SPR-RAM I/O Register
+2005        Reg    ×   I/O    VRAM Address Register #1
+2006        Reg    ×   I/O    VRAM Address Register #2
+2007        Reg   I/O   I/O    VRAM I/O Register
+4000-4013   Reg    ×   I/O    サウンド
+4014        Reg    ×   I/O    Sprite DMA Register
+4015        Reg   I/O   I/O    pAPU Sound/Vertical Clock Signal Register
+4016        Reg   I/O   I/O    Joypad #1
+4017        Reg   I/O   I/O    Joypad #2
+4020-6000   ROM   通常  MMC    Expansion ROM
+6000-8000   RAM   通常  通常   8KB Save RAM
+8000-C000   ROM   通常  MMC    PRG-ROM
+C000-10000  ROM   通常  MMC    PRG-ROM
+
+PPU
+場所        種類  R     W      注意
+0000-1000   RAM   通常  通常   ROMの場合もある Pattern table #0
+1000-2000   RAM   通常  通常   ROMの場合もある Pattern table #1
+2000-23C0   RAM   通常  通常   Name Table #0
+23C0-2400   RAM   通常  通常   Attribute Table #0
+2400-27C0   RAM   通常  通常   Name Table #1
+27C0-2800   RAM   通常  通常   Attribute Table #1
+2800-2BC0   RAM   通常  通常   Name Table #2
+2BC0-2C00   RAM   通常  通常   Attribute Table #2
+2C00-2FC0   RAM   通常  通常   Name Table #3
+2FC0-3000   RAM   通常  通常   Attribute Table #3
+3000-3F00   RAM   通常  通常   2000-2F00のミラー
+3F00-3F10   RAM   通常  通常   Image palette
+3F10-3F20   RAM   通常  通常   Sprite palette
+3F20-4000   RAM   通常  通常   パレットのミラー
+4000-C000   RAM   通常  通常   0000-8000のミラー
+
+エミュレートに必要なRAMのうち大きいもの
+2KB 内部RAM
+8KB Save RAM
+8KB Pattern Table #0, #1
+4KB Name Talbe + Attr Table
+
+使用頻度は
+内部RAM > Name Table >>> Save RAM > Pattern Table
+ぐらいだと思うので
+内部 RAM と Name Table を GBA の内部RAM に置く
+

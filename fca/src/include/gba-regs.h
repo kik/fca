@@ -209,8 +209,6 @@
 #define GBA_KEY_DOWN	(1 << 7)
 #define GBA_KEY_R	(1 << 8)
 #define GBA_KEY_L	(1 << 9)
-/* どう使うんだろう */
-#define GBA_KEY_ALL	(1 << 10)
 
 /*
  * IE

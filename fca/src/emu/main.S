@@ -111,7 +111,7 @@ init_interrupt:
 	@mov	r1, #0x8
 	@strh	r1, [r0, #4]
 
-	mov	r0, #(GBA_IRQ_VBL)
+	mov	r0, #(GBA_IRQ_VBL | GBA_IRQ_TIMERn(0))
 	orr	r0, r0, r0, lsl #16
 	@@ IFをクリアして
 	@@ IEを設定する
@@ -146,19 +146,25 @@ emu_break:
 @@@ 
 
 int_handler:
-	stmfd	sp!, {lr}
 	mov	r0, #GBA_REG_BASE
 
 	ldr	r1, [r0, #GBA_IE]
 	str	r1, [r0, #GBA_IE]
+
+	mov	r1, r1, lsr #16
+	stmfd	sp!, {r1, lr}
 
 	mov	r2, #1
 	str	r2, [r0, #GBA_IME]
 
 	tst	r1, #GBA_IRQ_VBL
 	blne	vbl_handler
-
-	ldmfd	sp!, {pc}
+#if 1
+	ldr	r1, [sp]
+	tst	r1, #GBA_IRQ_TIMERn(0)
+	blne	timer0_handler
+#endif
+	ldmfd	sp!, {r1, pc}
 
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -202,6 +208,8 @@ install_hsync_handler:
 
 current_line:	.long	0
 
+999:	.string "tm count %x %x\n"
+	ALIGN
 
 @@@ 
 @@@ メインループ
@@ -223,6 +231,14 @@ emulate_frame:
 	moveq	r0, #0x01000000
 	@@ Lも押されていればパニック
 	beq	emu_panic
+
+	ldr	r1, =ch1_freq
+	ldr	r1, [r1]
+	ldr	r2, =ch1_length
+	ldr	r2, [r2]
+	adr	r0, 999b
+	bl	emu_printf
+	mov	r0, #GBA_REG_BASE
 
 	mov	r2, #GBA_DISP_CR_ENB_BG3
 	ldr	r3, = GBA_BG_CR_MAP_ADDR(0x1C) | GBA_BG_CR_TILE_ADDR(2)

@@ -724,6 +724,8 @@ write_4014:
 	stmfd	sp!, {r4, r5, lr}	
 	bl	spr_dma_adr
 	@@ r0 = DMA src
+	sub	REG_CYCLE, REG_CYCLE, #512
+	sub	REG_CYCLE, REG_CYCLE, #2
 	adr	r1, gba_sprite
 	mov	r2, #64
 1:	
@@ -1554,6 +1556,11 @@ attr_index_map:
 
 	ALIGN
 
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ ¤½¤ÎÂ¾
+@@@ 
 
 	.globl	init_ppu
 init_ppu:

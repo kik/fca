@@ -15,8 +15,9 @@
  * 6502 のレジスタ
  *
  * A は常に 24 ビットシフトしておく
- * P はNZCのみ。残りは他の場所に置く
- * P は ARM のステータスビットと同じフォーマットにする
+ * P は2つに分ける。
+ * NZはほとんどの命令が変更するので，NZの元になる値を保存
+ * 残りは他の場所に置く
  *
  * S は24ビットシフトしておく
  * これで余って下のビットに P の残りを置く(VBDI)
@@ -31,9 +32,10 @@
 #define REG_Y  r6
 #define REG_PC r7
 #define REG_S  r8
-#define REG_P  r9
+#define REG_NZ  r9
 #define REG_P_REST REG_S
 
+#if 0
 /*
  * REG_P で使うフラグ
  */
@@ -41,18 +43,19 @@
 #define ARM_Z_FLAG 0x40000000
 #define ARM_C_FLAG 0x20000000
 #define ARM_V_FLAG 0x10000000
+#endif
 
 /*
  * REG_P_REST には各種フラグを置く
  *
  * 0
  * FEDCBA98 76543210
- * |||||||| |||||||+---IRQの発生
+ * |||||||| |||||||+---C キャリーまたはボローなし
  * |||||||| ||||||+---NMIの発生
  * |||||||| |||||+---I 割り込み許可
  * |||||||| ||||+---D 十進モード
  * |||||||| |||+---B
- * |||||||| ||+---空き
+ * |||||||| ||+---IRQの発生
  * |||||||| |+---V オーバーフロー
  * |||||||| +---$2005/$2006 トグルフラグ
  * ||||||||
@@ -84,12 +87,13 @@
 #define P_REST_B_FLAG 0x10
 #define P_REST_D_FLAG 0x08
 #define P_REST_I_FLAG 0x04
-#define P_REST_FLAGS  0x5C
+#define P_REST_C_FLAG 0x01
+#define P_REST_FLAGS  0x5D
 
 /*
  * 割り込みが発生するとセットされる
  */
-#define P_REST_INT_PENDING 0x01
+#define P_REST_INT_PENDING 0x20
 #define P_REST_NMI_PENDING 0x02
 
 #define ASSERT_NMI	orr	REG_P_REST, REG_P_REST, #P_REST_NMI_PENDING

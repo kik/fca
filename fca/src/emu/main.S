@@ -35,10 +35,10 @@ emulator_entry:
 
 @	mov	REG_BASE, #BASE_ADDR
 
-	bl	init_emulator
 #ifdef CPU_TEST
 	bl	run_cpu_test
 #endif
+	bl	init_emulator
 	bl	run_emulator
 
 	@@ restore registers
@@ -48,11 +48,7 @@ emulator_entry:
 
 	mov	pc, lr
 
-1:	.string "C\n"
-2:	.string "NC\n"
-
 	.pool
-
 
 @@@ 
 @@@ init_emulator
@@ -62,26 +58,9 @@ emulator_entry:
 init_emulator:	
 	stmfd	sp!, {r0, lr}
 	bl	init_cpu
-
-	adr	r0, 1f
-	bl	emu_printf
-
 	bl	init_ppu
-
-	adr	r0, 2f
-	bl	emu_printf
-
-	ldmfd	sp!, {r0}
-	bl	init_mapper
-
-	adr	r0, 3f
-	bl	emu_printf
-
-	ldmfd	sp!, {pc}
-1:	.string "init cpu\n"
-2:	.string "init ppu\n"
-3:	.string "init mapper\n"
-	ALIGN
+	ldmfd	sp!, {r0, lr}
+	b	init_mapper
 
 @@@ 
 @@@ for debug
@@ -109,18 +88,23 @@ emu_break:
 	mov	pc, lr
 
 current_line:	.long	0
-vbl_count:	.long	0
 
 	ALIGN
 int_handler:
-	ldr	r0, vbl_count
-	add	r0, r0, #1
-	str	r0, vbl_count
-	bx	lr
+	stmfd	sp!, {lr}
+	mov	r0, #0x04000000
+	add	r0, r0, #0x200
+	ldrh	r1, [r0, #2]
+	strh	r1, [r0, #2]
+
+	tst	r1, #1
+	blne	vbl_handler
+
+	ldmfd	sp!, {pc}
 
 run_emulator:	
 	stmfd	sp!, {lr}
-#if 0
+#if 1
 	mov	r0, #0x04000000
 	adr	r1, int_handler
 	str	r1, [r0, #-4]
@@ -136,7 +120,6 @@ emulate_frame:
 	bl	ppu_start_frame
 	@@ 0..239
 	mov	r0, #0
-	str	r0, vbl_count
 1:	
 	str	r0, current_line
 	add	REG_CYCLE, REG_CYCLE, #113

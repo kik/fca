@@ -396,35 +396,34 @@
 @@@ 
 @@@ フラグのロード
 @@@ ARMのフラグをレジスタにロードする
+#if 0
 .macro	MRS_P
 	mrs	REG_P, CPSR
 .endm
-
+#endif
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@ 
 @@@ フラグのストア
 @@@ ARMのフラグにレジスタをストアする
 @@@ Mappy VM のバグで動かないので使わない
+#if 0
 .macro	MSR_P
 	bug	bug	bug
 	msr	CPSR_f, REG_P
 .endm
-
+#endif
 
 @@@ P を復元する
 @@@ r0		=> 6502 の P レジスタ
-@@@ REG_P	<= 復元された REG_P
+@@@ REG_NZ	<= 復元された REG_NZ
 @@@ REG_P_REST	<= 復元された REG_P_REST
 .macro	LOAD_P
-	mov	REG_P, #0
-
+	mov	REG_NZ, #0
 	tst	r0, #P_Z_FLAG
-	orrne	REG_P, REG_P, #ARM_Z_FLAG
-	tst	r0, #P_C_FLAG
-	orrne	REG_P, REG_P, #ARM_C_FLAG
+	moveq	REG_NZ, #0x01
 	tst	r0, #P_N_FLAG
-	orrne	REG_P, REG_P, #ARM_N_FLAG
+	orrne	REG_NZ, REG_NZ, #0x80 << 24
 
 	bic	REG_P_REST, REG_P_REST, #P_REST_FLAGS
 	and	r0, r0, #P_REST_FLAGS
@@ -433,17 +432,15 @@
 
 @@@ P を保存する
 @@@ 
-@@@ REG_P	=> 元にする REG_P
+@@@ REG_NZ	=> 元にする REG_NZ
 @@@ REG_P_REST	=> 元にする REG_P_REST
 @@@ r0		<= 6502 の P
 .macro	SAVE_P
 	and	r0, REG_P_REST, #P_REST_FLAGS
-	tst	REG_P, #ARM_C_FLAG
-	orrne	r0, r0, #P_C_FLAG
-	tst	REG_P, #ARM_N_FLAG
+	tst	REG_NZ, #0x80 << 24
 	orrne	r0, r0, #P_N_FLAG
-	tst	REG_P, #ARM_Z_FLAG
-	orrne	r0, r0, #P_Z_FLAG
+	tst	REG_NZ, #0xFF
+	orreq	r0, r0, #P_Z_FLAG
 	orr	r0, r0, #P_R_FLAG
 .endm
 
@@ -472,18 +469,17 @@ opEA:	@ NOP
 @@@ フラグ操作命令
 @@@ すべて1バイト
 @@@
-@@@ CZNはREG_Pにある
-@@@ 残りはREG_P_RESTにある
+@@@ これで変更できるフラグは全てREG_P_RESTにある
 @@@ Iを変更する場合は割り込みをチェックしなればならない
 @@@ 
 op18:	@ CLC
 	IMPLIED
-	bic	REG_P, REG_P, #ARM_C_FLAG
+	bic	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 	CYCLE_NEXT	2
 
 op38:	@ SEC
 	IMPLIED
-	orr	REG_P, REG_P, #ARM_C_FLAG
+	orr	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 	CYCLE_NEXT	2
 
 opD8:	@ CLD
@@ -523,45 +519,33 @@ opB8:	@ CLV
 @@@ 
 opAA:	@ TAX
 	IMPLIED
-	and	REG_P, REG_P, #ARM_C_FLAG
-	cmp	REG_A, #0
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
 	mov	REG_X, REG_A, lsr #24
+	mov	REG_NZ, REG_A, asr #24
 	CYCLE_NEXT	2
 
 op8A:	@ TXA
 	IMPLIED
-	and	REG_P, REG_P, #ARM_C_FLAG
-	movs	REG_A, REG_X, lsl #24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
+	mov	REG_A, REG_X, lsl #24
+	mov	REG_NZ, REG_A, asr #24
 	CYCLE_NEXT	2
 
 opA8:	@ TAY
 	IMPLIED
-	and	REG_P, REG_P, #ARM_C_FLAG
-	cmp	REG_A, #0
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
 	mov	REG_Y, REG_A, lsr #24
+	mov	REG_NZ, REG_A, asr #24
 	CYCLE_NEXT	2
 
 op98:	@ TYA
 	IMPLIED
-	and	REG_P, REG_P, #ARM_C_FLAG
-	movs	REG_A, REG_Y, lsl #24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
+	mov	REG_A, REG_Y, lsl #24
+	mov	REG_NZ, REG_A, asr #24
 	CYCLE_NEXT	2
 
 opBA:	@ TSX
 	IMPLIED
-	and	REG_P, REG_P, #ARM_C_FLAG
-	ands	REG_S, REG_S, #0xFF << 24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
-	mov	REG_X, REG_S, lsr #24
+	and	REG_X, REG_S, #0xFF << 24
+	mov	REG_NZ, REG_X, asr #24
+	mov	REG_X, REG_X, lsr #24
 	CYCLE_NEXT	2
 
 op9A:	@ TXS
@@ -595,10 +579,8 @@ op08:	@ PHP
 op68:	@ PLA
 	IMPLIED
 	POP_BYTE
-	and	REG_P, REG_P, #ARM_C_FLAG
-	movs	REG_A, r0, lsl #24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
+	mov	REG_A, r0, lsl #24
+	mov	REG_NZ, REG_A, asr #24
 	CYCLE_NEXT	4
 
 op28:	@ PLP
@@ -618,18 +600,14 @@ op28:	@ PLP
 @@@ ----
 @@@ **--
 .macro	OP_LDA
-	and	REG_P, REG_P, #ARM_C_FLAG
-	movs	REG_A, r0, lsl #24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
+	mov	REG_A, r0, lsl #24
+	mov	REG_NZ, REG_A, asr #24
 .endm
 
 .macro	OP_LDXY	reg
-	and	REG_P, REG_P, #ARM_C_FLAG
-	movs	\reg, r0
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	tst	\reg, #0x80
-	orrne	REG_P, REG_P, #ARM_N_FLAG
+	mov	\reg, r0
+	mov	REG_NZ, r0, lsl #24
+	mov	REG_NZ, REG_NZ, asr #24
 .endm
 
 .macro	OP_LDX
@@ -818,37 +796,29 @@ op8C:	@ STY $nnnn
 @@@ ----
 @@@ **--
 .macro	OP_INC
-	and	REG_P, REG_P, #ARM_C_FLAG
 	add	r0, r0, #1
-	movs	r1, r0, lsl #24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
+	mov	REG_NZ, r0, lsl #24
+	mov	REG_NZ, REG_NZ, asr #24
 .endm
 
 .macro	OP_INXY	reg
-	and	REG_P, REG_P, #ARM_C_FLAG
 	add	\reg, \reg, #1
-	movs	\reg, \reg, lsl #24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
-	mov	\reg, \reg, lsr #24
+	and	\reg, \reg, #0xFF
+	mov	REG_NZ, \reg, lsl #24
+	mov	REG_NZ, REG_NZ, asr #24
 .endm
 
 .macro	OP_DEC
-	and	REG_P, REG_P, #ARM_C_FLAG
-	subs	r0, r0, #1
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	tst	r0, #0x80
-	orrne	REG_P, REG_P, #ARM_N_FLAG
+	sub	r0, r0, #1
+	mov	REG_NZ, r0, lsl #24
+	mov	REG_NZ, REG_NZ, asr #24
 .endm
 
 .macro	OP_DEXY	reg
-	and	REG_P, REG_P, #ARM_C_FLAG
 	subs	\reg, \reg, #1	
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	tst	\reg, #0x80
-	orrne	REG_P, REG_P, #ARM_N_FLAG
 	and	\reg, \reg, #0xFF
+	mov	REG_NZ, \reg, lsl #24
+	mov	REG_NZ, REG_NZ, asr #24
 .endm
 
 opE6:	@ INC $nn
@@ -922,25 +892,28 @@ op88:	@ DEY
 .macro	OP_ADC
 	@@ restore carry
 	@@ なんか MappyVM の MSR にバグがあるのでこうする
-	tst	r0, REG_P, lsl #3
+	tst	r0, REG_P_REST, lsr #1
 	@@ A の下24ビットをFFFFFFにする
 	subcs	REG_A, REG_A, #1
 	addcs	REG_A, REG_A, #1 << 24
 	@@ キャリーつきの加算
 	adcs	REG_A, REG_A, r0, lsl #24
-	MRS_P
+	mov	REG_NZ, REG_A, asr #24
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 	orrvs	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 	bicvc	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 .endm
 
 .macro	OP_SBC
-	tst	r0, REG_P, lsl #3
+	tst	r0, REG_P_REST, lsr #1
 	sbcs	REG_A, REG_A, r0, lsl #24
-	MRS_P
+	and	REG_A, REG_A, #0xFF << 24
+	mov	REG_NZ, REG_A, asr #24
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 	orrvs	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 	bicvc	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
-	ands	REG_A, REG_A, #0xFF << 24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
 .endm
 
 op69:	@ ADC #$nn
@@ -1030,24 +1003,18 @@ opF1:	@ SBC ($nn), Y
 @@@ ----
 @@@ **--
 .macro	OP_AND
-	and	REG_P, REG_P, #ARM_C_FLAG
-	ands	REG_A, REG_A, r0, lsl #24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
+	and	REG_A, REG_A, r0, lsl #24
+	mov	REG_NZ, REG_A, asr #24
 .endm
 
 .macro	OP_EOR
-	and	REG_P, REG_P, #ARM_C_FLAG
-	eors	REG_A, REG_A, r0, lsl #24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
+	eor	REG_A, REG_A, r0, lsl #24
+	mov	REG_NZ, REG_A, asr #24
 .endm
 
 .macro	OP_ORA
-	and	REG_P, REG_P, #ARM_C_FLAG
-	orrs	REG_A, REG_A, r0, lsl #24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
+	orr	REG_A, REG_A, r0, lsl #24
+	mov	REG_NZ, REG_A, asr #24
 .endm
 
 op29:	@ AND #$nn
@@ -1176,14 +1143,18 @@ op11:	@ ORA ($nn), Y
 @@@ ----
 @@@ **-*
 .macro	OP_CMP
-	cmp	REG_A, r0, lsl #24
-	MRS_P
+	subs	REG_NZ, REG_A, r0, lsl #24
+	mov	REG_NZ, REG_NZ, asr #24
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm
 
 .macro	OP_CPXY	reg
 	mov	r1, \reg, lsl #24
-	cmp	r1, r0, lsl #24
-	MRS_P
+	subs	REG_NZ, r1, r0, lsl #24
+	mov	REG_NZ, REG_NZ, asr #24
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm
 
 .macro	OP_CPX
@@ -1274,12 +1245,11 @@ opCC:	@ CPY $nnnn
 @@@ ----
 @@@ ***-
 .macro	OP_BIT
-	and	REG_P, REG_P, #ARM_C_FLAG
-	tst	REG_A, r0, lsl #24
-	orreq	REG_P, REG_P, #ARM_Z_FLAG
+	and	REG_NZ, r0, REG_A, lsr #24
 	@@ R0[7] => C, R0[6] => N
 	movs	r0, r0, lsl #25
-	orrcs	REG_P, REG_P, #ARM_N_FLAG
+	orrcs	REG_NZ, REG_NZ, #0x80 << 24
+	biccc	REG_NZ, REG_NZ, #0x80 << 24
 	orrmi	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 	bicpl	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 .endm
@@ -1304,25 +1274,34 @@ op2C:	@ BIT $nnnn
 @@@ NZCを変更する
 @@@ 
 .macro	OP_ASL
-	movs	r0, r0, lsl #25
-	mov	r0, r0, lsr #24
-	MRS_P
+	movs	REG_NZ, r0, lsl #25
+	mov	r0, REG_NZ, lsr #24
+	mov	REG_NZ, REG_NZ, asr #24
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm
 
 .macro	OP_ASL_A
 	movs	REG_A, REG_A, lsl #1
-	MRS_P
+	mov	REG_NZ, REG_A, asr #24
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm
 
 .macro	OP_LSR
 	movs	r0, r0, lsr #1
-	MRS_P
+	@@ Nは立たない
+	mov	REG_NZ, r0
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm
 
 .macro	OP_LSR_A
-	movs	REG_A, REG_A, lsr #25
-	mov	REG_A, REG_A, lsl #24
-	MRS_P
+	@@ Nは立たない
+	movs	REG_NZ, REG_A, lsr #25
+	mov	REG_A, REG_NZ, lsl #24
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm	
 
 op0A:	@ ASL A
@@ -1387,42 +1366,42 @@ op5E:	@ LSR $nnnn, X
 @@@ NZCを変更する
 @@@ 
 .macro	OP_ROL
-	tst	REG_P, #ARM_C_FLAG
-	movne	r1, #1 << 24
-	moveq	r1, #0
-	orrs	r0, r1, r0, lsl #25
-	mov	r0, r0, lsr #24
-	MRS_P
+	and	r1, REG_P_REST, #P_REST_C_FLAG
+	orr	r0, r1, r0, lsl #1
+	movs	REG_NZ, r0, lsl #24
+	mov	r0, REG_NZ, lsr #24
+	mov	REG_NZ, REG_NZ, asr #24
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm
 
 .macro	OP_ROL_A
-	tst	REG_P, #ARM_C_FLAG
-	movne	r1, #1 << 24
-	moveq	r1, #0
-	orrs	REG_A, r1, REG_A, lsl #1
-	MRS_P
+	and	r1, REG_P_REST, #P_REST_C_FLAG
+	orr	REG_A, REG_A, r1, lsl #23
+	movs	REG_A, REG_A, lsl #1
+	mov	REG_NZ, REG_A, asr #24
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm
 
 .macro	OP_ROR
-	tst	REG_P, #ARM_C_FLAG
-	movne	r1, #0x80
-	moveq	r1, #0
+	and	r1, REG_P_REST, #P_REST_C_FLAG
+	mov	r1, r1, lsl #7
 	orrs	r0, r1, r0, lsr #1
-	MRS_P
-	tst	r0, #0x80
-	orrne	REG_P, REG_P, #ARM_N_FLAG
-	biceq	REG_P, REG_P, #ARM_N_FLAG
+	mov	REG_NZ, r0, lsl #24
+	mov	REG_NZ, REG_NZ, asr #24
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm
 
 .macro	OP_ROR_A
-	tst	REG_P, #ARM_C_FLAG
-	movne	r1, #0x80
-	moveq	r1, #0
-	orrs	r0, r1, REG_A, lsr #25
-	MRS_P
-	movs	REG_A, r0, lsl #24
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
-	bicpl	REG_P, REG_P, #ARM_N_FLAG
+	and	r1, REG_P_REST, #P_REST_C_FLAG
+	mov	r1, r1, lsl #7
+	orrs	REG_A, r1, REG_A, lsr #25
+	mov	REG_A, REG_A, lsl #24
+	mov	REG_NZ, REG_A, asr #24
+	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 .endm
 
 op2A:	@ ROL A
@@ -1500,37 +1479,35 @@ op7E:	@ ROR $nnnn, X
 .endm
 
 op90:	@ BCC $nn
-	tst	REG_P, #ARM_C_FLAG
+	tst	REG_P_REST, #P_REST_C_FLAG
 	@@ Z が立てば
 	BRANCH_EQ
 	CYCLE_NEXT	2
 
 opB0:	@ BCS $nn
-	tst	REG_P, #ARM_C_FLAG
+	tst	REG_P_REST, #P_REST_C_FLAG
 	@@ Z が下りてれば
 	BRANCH_NE
 	CYCLE_NEXT	2
 
 opD0:	@ BNE $nn
-	tst	REG_P, #ARM_Z_FLAG
-	@@ 結果が0なら
-	BRANCH_EQ
-	CYCLE_NEXT	2
-
-opF0:	@ BEQ $nn
-	tst	REG_P, #ARM_Z_FLAG
-	@@ Z が下りてれば
+	tst	REG_NZ, #0xFF
 	BRANCH_NE
 	CYCLE_NEXT	2
 
+opF0:	@ BEQ $nn
+	tst	REG_NZ, #0xFF
+	BRANCH_EQ
+	CYCLE_NEXT	2
+
 op30:	@ BMI $nn
-	tst	REG_P, #ARM_N_FLAG
+	tst	REG_NZ, #0x80 << 24
 	@@ 結果が0でないなら
 	BRANCH_NE
 	CYCLE_NEXT	2
 
 op10:	@ BPL $nn
-	tst	REG_P, #ARM_N_FLAG
+	tst	REG_NZ, #0x80 << 24
 	@@ 結果が0なら
 	BRANCH_EQ
 	CYCLE_NEXT	2
@@ -1738,7 +1715,7 @@ do_int:
 
 cpu_reset:
 	stmfd	sp!, {lr}
-	mov	REG_P, #ARM_Z_FLAG
+	mov	REG_NZ, #0
 	@@ REG_P_RESET の上8ビットはSなのでマスクしないと
 	and	REG_P_REST, REG_P_REST, #0xFF << 24
 	orr	REG_P_REST, REG_P_REST, #P_REST_I_FLAG

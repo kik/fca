@@ -1,6 +1,8 @@
 
 @#define TEST(n)	mov	REG_CYCLE, #(n)
 .macro	TEST	m
+	mov	REG_CYCLE, #(\m)
+#if 0
 	adr	r0, 1f
 	mov	r1, #(\m)
 	adr	lr, 2f
@@ -8,6 +10,7 @@
 1:	.string	"TEST %x\n"
 	ALIGN
 2:	mov	REG_CYCLE, #(\m)
+#endif
 .endm
 
 #define A(n)	mov	REG_A, #(n << 24)
@@ -17,14 +20,14 @@
 #define OP(n)	mov	r0, #(n)
 #define AD(n)	ldr	REG_ADDR, =n
 
-#define Z	orr	REG_P, REG_P, #ARM_Z_FLAG
-#define N	orr	REG_P, REG_P, #ARM_N_FLAG
-#define C	orr	REG_P, REG_P, #ARM_C_FLAG
+#define Z	orr	REG_NZ, REG_NZ, #0x01
+#define N	orr	REG_NZ, REG_NZ, #0x80 << 24
+#define C	orr	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 #define V	orr	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 
-#define NZ	bic	REG_P, REG_P, #ARM_Z_FLAG
-#define NN	bic	REG_P, REG_P, #ARM_N_FLAG
-#define NC	bic	REG_P, REG_P, #ARM_C_FLAG
+#define NZ	bic	REG_NZ, REG_NZ, #0xFF
+#define NN	bic	REG_NZ, REG_NZ, #0x80 << 24
+#define NC	bic	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
 #define NV	bic	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 
 #define CHECK	bne	fail
@@ -34,15 +37,15 @@
 #define C_S(n)	teq	REG_S, #(n); CHECK
 #define C_OP(n)	and	r0, r0, #0xFF; teq	r0, #(n); CHECK
 
-#define C_Z	tst	REG_P, #ARM_Z_FLAG; beq	fail
-#define C_N	tst	REG_P, #ARM_N_FLAG; beq	fail
+#define C_Z	tst	REG_NZ, #0xFF; bne	fail
+#define C_N	tst	REG_NZ, #0x80 << 24; beq	fail
 #define C_V	tst	REG_P_REST, #P_REST_V_FLAG; beq	fail
-#define C_C	tst	REG_P, #ARM_C_FLAG; beq	fail
+#define C_C	tst	REG_P_REST, #P_REST_C_FLAG; beq	fail
 
-#define C_NZ	tst	REG_P, #ARM_Z_FLAG; bne	fail
-#define C_NN	tst	REG_P, #ARM_N_FLAG; bne	fail
+#define C_NZ	tst	REG_NZ, #0xFF; beq	fail
+#define C_NN	tst	REG_NZ, #0x80 << 24; bne	fail
 #define C_NV	tst	REG_P_REST, #P_REST_V_FLAG; bne	fail
-#define C_NC	tst	REG_P, #ARM_C_FLAG; bne	fail
+#define C_NC	tst	REG_P_REST, #P_REST_C_FLAG; bne	fail
 
 	ALIGN
 	.globl	run_cpu_test

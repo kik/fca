@@ -393,9 +393,12 @@ nes_line:
 draw_line:
 	ldr	r0, nes_line
 	ldrb	r3, [r0], #1
+	ldrb	r2, [r0]
+	teq	r3, r2
+	moveq	r3, #160
 	str	r0, nes_line
 	@@ r3 は GBA のライン番号(0-159)
-	@@ 255 の場合はこのラインはスキップする
+	@@ 160以上 の場合はこのラインはスキップする
 
 	@@ v:0000010000011111=t:0000010000011111
 	@@ vを更新してXのスクロール値を得る
@@ -422,9 +425,9 @@ draw_line:
 	and	r1, r1, #0x04000000
 	orr	r2, r2, r1, lsr #18
 
-	teq	r3, #255
+	cmp	r3, #160
 	adr	r1, scroll_value
-	strne	r2, [r1, r3, lsl #2]
+	strcc	r2, [r1, r3, lsl #2]
 
 	@@ loopy_v を次のラインにして保存する
 	add	r0, r0, #0x1000
@@ -515,17 +518,17 @@ vbl_handler:
 
 @@@ 
 @@@ どのラインをスキップするか
+@@@ スプライトの位置を決めるのにも使う
 @@@ 
-@@@ 255 = スキップ
 @@@ 0-159 = GBAのライン番号
+@@@ 残り  = スキップ
 @@@ 
 @@@ 上下13ラインはスキップして，残りは1/4をスキップする
 @@@ 
 skip_table:	
-#define P(n) n*6+2, 255, n*6+3, n*6+4, n*6+5, 255, n*6+6, n*6+7
-
-	.byte	255, 255, 255, 255, 255, 255, 255, 255	@ 0
-	.byte	255, 255, 255, 255, 255,   0,   1, 255	@ 8
+#define P(n) n*6+2, n*6+3, n*6+3, n*6+4, n*6+5, n*6+6, n*6+6, n*6+7
+	.byte	243, 244, 245, 246, 247, 248, 249, 250	@ 0
+	.byte	251, 252, 253, 254, 255,   0,   1,   2	@ 8
 	.byte	P( 0), P( 1)				@ 16 
 	.byte	P( 2), P( 3), P( 4), P( 5)		@ 32
 	.byte	P( 6), P( 7), P( 8), P( 9)		@ 64
@@ -533,8 +536,10 @@ skip_table:
 	.byte	P(14), P(15), P(16), P(17)		@128
 	.byte	P(18), P(19), P(20), P(21)		@160
 	.byte	P(22), P(23), P(24), P(25)		@192
-	.byte	158, 159, 255, 255, 255, 255, 255, 255	@224
-	.byte	255, 255, 255, 255, 255, 255, 255, 255	@232
+	.byte	158, 159, 160, 160, 160, 160, 160, 160	@224
+	.byte	160, 160, 160, 160, 160, 160, 160, 160	@232
+	.byte	160, 160, 160, 160, 160, 160, 160, 160	@240
+	.byte	160, 160, 160, 160, 160, 160, 160, 160	@248
 
 #undef P
 
@@ -587,9 +592,7 @@ skip_table:
 @@@ 1
 @@@ FEDCBA9876543210
 @@@ |||||||+++++++++---X
-@@@ ||||+++---Rot	<= 0
-@@@ |||+---H flip	<= NES HF
-@@@ ||+---V flip	<= NES VF
+@@@ ||+++++---Rot	<= NES VH
 @@@ ++---Size		<= 0
 @@@ 
 @@@ 2
@@ -625,11 +628,15 @@ write_4014:
 1:	
 	ldr	r3, [r0], #4
 	@@ Y
-	strb	r3, [r1], #8
+	and	r5, r3, #255
+	adr	r4, skip_table
+	ldrb	r4, [r4, r5]
+	strb	r4, [r1], #8
 
-	ldrh	r4, [r1, #-6]
-	and	r4, r4, #0xCE00
-	orr	r4, r4, r3, lsr #24
+@	ldrh	r4, [r1, #-6]
+@	and	r4, r4, #0xC000
+@	orr	r4, r4, r3, lsr #24
+	mov	r4, r3, lsr #24
 	and	r5, r3, #0xC0 << 16
 	orr	r4, r4, r5, lsr #10
 	strh	r4, [r1, #-6]
@@ -813,6 +820,69 @@ set_spr_adr_1:
 
 	subs	r2, r2, #1
 	bne	1b
+	mov	pc, lr
+
+init_gba_spr:	
+	mov	r0, #0x07000000
+	mov	r1, #128
+	@@ 全てのスプライトを消す
+	mov	r2, #160
+	mov	r3, #0
+1:
+	str	r2, [r0], #4
+	str	r3, [r0], #4
+	subs	r1, r1, #1
+	bne	1b
+
+	adr	r0, gba_sprite
+	mov	r1, #64
+	@@ Rフラグを立てる
+	mov	r2, #0x0100
+1:	
+	str	r3, [r0], #4
+	str	r3, [r0], #4
+	subs	r1, r1, #1
+	bne	1b
+#if 0
+
+	adr	r0, gba_sprite
+	mov	r1, #0x0100	@ X Scale
+	mov	r2, #0x00C0	@ Y Scale
+	mov	r3, #0
+	strh	r1, [r0, #6]
+	strh	r3, [r0, #14]
+	strh	r3, [r0, #22]
+	strh	r2, [r0, #30]
+	add	r0, r0, #32
+
+	mov	r1, #0xFF00	@ X Scale (flip)
+	mov	r2, #0x00C0	@ Y Scale
+	mov	r3, #0
+	strh	r1, [r0, #6]
+	strh	r3, [r0, #14]
+	strh	r3, [r0, #22]
+	strh	r2, [r0, #30]
+	add	r0, r0, #32
+
+	mov	r1, #0x0100	@ X Scale
+	mov	r2, #0xFF00	@ Y Scale (flip)
+	orr	r2, r2, #0x40
+	mov	r3, #0
+	strh	r1, [r0, #6]
+	strh	r3, [r0, #14]
+	strh	r3, [r0, #22]
+	strh	r2, [r0, #30]
+	add	r0, r0, #32
+
+	mov	r1, #0xFF00	@ X Scale (flip)
+	mov	r2, #0xFF00	@ Y Scale (flip)
+	orr	r2, r2, #0x40
+	mov	r3, #0
+	strh	r1, [r0, #6]
+	strh	r3, [r0, #14]
+	strh	r3, [r0, #22]
+	strh	r2, [r0, #30]
+#endif
 	mov	pc, lr
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1329,6 +1399,7 @@ attr_index_map:
 
 	.globl	init_ppu
 init_ppu:
+	stmfd	sp!, {lr}
 	@@ 画面を消す
 	mov	r0, #0x0080
 	mov	r1, #0x04000000
@@ -1337,8 +1408,10 @@ init_ppu:
 	mov	r0, #0x0008
 	strh	r0, [r1, #4]
 
-	b	init_tile_trans_table
-	mov	pc, lr
+	bl	init_tile_trans_table
+	bl	init_gba_spr
+
+	ldmfd	sp!, {pc}
 
 	.globl	ppu_start_vbl
 ppu_start_vbl:	
@@ -1352,12 +1425,19 @@ ppu_end_vbl:
 	mov	pc, lr
 
 
-	.globl	read_high_reg
 	.globl	read_save_ram
 	.globl	write_save_ram
-read_high_reg:	
 read_save_ram:	
 write_save_ram:	
+	mov	pc, lr
+
+	.globl	read_high_reg
+read_high_reg:	
+	bic	r1, REG_ADDR, #0x4000
+	teq	r1, #0x16
+	beq	read_4016
+	teq	r1, #0x17
+	beq	read_4017
 	mov	pc, lr
 
 	.globl	write_high_reg
@@ -1365,4 +1445,6 @@ write_high_reg:
 	bic	r1, REG_ADDR, #0x4000
 	teq	r1, #0x14
 	beq	write_4014
+	teq	r1, #0x16
+	beq	write_4016
 	mov	pc, lr

@@ -12,7 +12,7 @@ CFLAGS = -Iinlcude
 
 OBJ = shell/crt0.o shell/shell.o shell/text.o shell/lib.o shell/file.o \
       shell/load.o shell/disass.o \
-      emu/main.o emu/cpu.o emu/mapper.o emu/ppu.o
+      emu/main.o emu/cpu.o emu/mapper.o emu/ppu.o emu/pad.o
 
 all: shell.gba
 

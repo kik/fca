@@ -12,7 +12,8 @@ CFLAGS = -Iinlcude
 
 OBJ = shell/crt0.o shell/shell.o shell/text.o shell/lib.o shell/file.o \
       shell/load.o shell/disass.o \
-      emu/main.o emu/cpu.o emu/mapper.o emu/ppu.o emu/pad.o emu/apu.o \
+      emu/main.o emu/cpu.o emu/mapper.o emu/ppu.o emu/ppu-map.o \
+      emu/ppu-palette.o emu/ppu-spr.o emu/ppu-tile.o emu/pad.o emu/apu.o \
       emu/mapper/mapper0.o
 
 MAPPER = mapper0.bin mapper2.bin mapper3.bin mapper4.bin

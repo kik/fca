@@ -212,10 +212,6 @@ read_2007:
 	bic	r1, r1, #0x3000
 	mov	r2, r1, lsr #10
 	bic	r1, r1, #0xC00
-#if 0
-	cmp	r1, #0x3C0
-	bcs	read_attr
-#endif
 	b	read_map
 
 @@@ 
@@ -240,10 +236,6 @@ write_2007:
 	bic	r1, r1, #0x3000
 	mov	r2, r1, lsr #10
 	bic	r1, r1, #0xC00
-#if 0
-	cmp	r1, #0x3C0
-	bcs	write_attr
-#endif
 	b	write_map
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -272,7 +264,7 @@ ppu_start_frame:
 
 	mov	r0, #GBA_DISP_CR_1D_SPR
 	tst	REG_P_REST, #P_REST_DRAW_BG
-	@@ BGを描く場合は BG_0 を有効に
+	@@ BGを描く場合は BG_0 と BG_1 を有効に
 	orrne	r0, r0, #(GBA_DISP_CR_ENB_BG0 | GBA_DISP_CR_ENB_BG1)
 	tst	REG_P_REST, #P_REST_DRAW_SPR
 	orrne	r0, r0, #GBA_DISP_CR_ENB_SPR
@@ -286,6 +278,7 @@ ppu_start_frame:
 	@@ BGもSPRも描かないならここでおわり
 	moveq	pc, lr
 
+	@@ αブレンドを設定
 	ldr	r0, =0x08080241
 	str	r0, [r1, #0x50]
 
@@ -335,17 +328,17 @@ ppu_start_frame:
 	strb	r2, gba_line_0
 	strb	r2, gba_line_1
 
+	bl	update_tile
+	bl	update_spr
+#if 0
 	bl	validate_tile
 	bl	validate_spr
+#endif
 
 	ldmfd	sp!, {pc}
 
 	.pool
 
-#if 0
-nes_line:
-	.long	0
-#endif
 gba_line_0:
 	.byte	0
 gba_line_1:
@@ -425,9 +418,13 @@ gba_line_1:
 	.globl	draw_line
 
 draw_line:
+	stmfd	sp!, {r4, lr}
 	@@ まずHITをチェックする
 	and	r1, REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR | P_REST_SPR_HIT)
 	teq	r1, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
+	bleq	check_spr_hit
+
+#if 0
 	bne	1f
 	ldrb	r1, nes_sprite_0
 	add	r1, r1, #1
@@ -437,11 +434,15 @@ draw_line:
 	tst	REG_P_REST, #P_REST_SPR_SZ
 	movne	r1, #16
 	cmp	r2, r1
+#if 0
+	@@ 正確にHITを実装するにはvが必要だが
+	@@ 今のルーチンははしょってるので必要ない
 	@@ r0 = v, r1 = tx, r2 = spr offset
 	ldrcc	r0, loopy_v
 	ldrcc	r1, loopy_tx
-	bcc	check_spr_hit
-check_spr_hit_ret:	
+#endif
+	blcc	check_spr_hit
+#endif
 1:	
 	@@ v:0000010000011111=t:0000010000011111
 	ldr	r0, loopy_v
@@ -481,26 +482,21 @@ check_spr_hit_ret:
 	add	r0, r0, #0x1000
 	str	r0, loopy_v
 
-	ldrb	r0, gba_line_0
-	add	r1, r0, #1
+	ldrb	r4, gba_line_0
+	add	r1, r4, #1
 	strb	r1, gba_line_0
-	cmp	r0, #160
-	movcs	pc, lr
+	cmp	r4, #160
+	ldmcsfd	sp!, {r4, pc}
 
 	adr	r1, scroll_value
-	sub	r2, r2, r0, lsl #16
-	str	r2, [r1, r0, lsl #3]
+	sub	r2, r2, r4, lsl #16
+	str	r2, [r1, r4, lsl #3]
 
+	bl	update_tile_per_line
 	adr	r1, bg_cr_value
-	ldr	r2, screen_size
-	orr	r2, r2, #GBA_BG_CR_MAP_ADDR(0x4)
-	tst	REG_P_REST, #P_REST_BG_ADR
-	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
-	add	r1, r1, r0, lsl #2
-	strh	r2, [r1]
-
-	mov	pc, lr
-
+	add	r1, r1, r4, lsl #2
+	strh	r0, [r1]
+	ldmfd	sp!, {r4, pc}
 2:	
 3:	
 4:	
@@ -509,52 +505,46 @@ check_spr_hit_ret:
 	add	r0, r0, #0x1000
 	str	r0, loopy_v
 
-	ldrb	r0, gba_line_0
-	add	r1, r0, #1
+	ldrb	r4, gba_line_0
+	add	r1, r4, #1
 	strb	r1, gba_line_0
 	@@ 同じ値にする
 	strb	r1, gba_line_1
-	cmp	r0, #160
-	movcs	pc, lr
+	cmp	r4, #160
+	ldmcsfd sp!, {r4, pc}
 
 	adr	r1, scroll_value
-	sub	r2, r2, r0, lsl #16
-	str	r2, [r1, r0, lsl #3]!
+	sub	r2, r2, r4, lsl #16
+	str	r2, [r1, r4, lsl #3]!
 	str	r2, [r1, #4]
 
+	bl	update_tile_per_line
 	adr	r1, bg_cr_value
-	ldr	r2, screen_size
-	orr	r2, r2, #GBA_BG_CR_MAP_ADDR(0x4)
-	tst	REG_P_REST, #P_REST_BG_ADR
-	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
-	orr	r2, r2, r2, lsl #16
-	str	r2, [r1, r0, lsl #2]
 
-	mov	pc, lr
+	orr	r0, r0, r0, lsl #16
+	str	r0, [r1, r4, lsl #2]
+	ldmfd	sp!, {r4, pc}
 
 6:	
 	@@ 6はBG1にだけ描く
 	add	r0, r0, #0x1000
 	str	r0, loopy_v
 
-	ldrb	r0, gba_line_1
-	add	r1, r0, #1
+	ldrb	r4, gba_line_1
+	add	r1, r4, #1
 	strb	r1, gba_line_1
-	cmp	r0, #160
-	movcs	pc, lr
+	cmp	r4, #160
+	ldmcsfd	sp!, {r4, pc}
 
 	adr	r1, scroll_value + 4
-	sub	r2, r2, r0, lsl #16
-	str	r2, [r1, r0, lsl #3]
+	sub	r2, r2, r4, lsl #16
+	str	r2, [r1, r4, lsl #3]
 
+	bl	update_tile_per_line
 	adr	r1, bg_cr_value + 2
-	ldr	r2, screen_size
-	orr	r2, r2, #GBA_BG_CR_MAP_ADDR(0x4)
-	tst	REG_P_REST, #P_REST_BG_ADR
-	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
-	add	r1, r1, r0, lsl #2
-	strh	r2, [r1]
-	mov	pc, lr
+	add	r1, r1, r4, lsl #2
+	strh	r0, [r1]
+	ldmfd	sp!, {r4, pc}
 
 7:	
 	bic	r0, r0, #0xF000
@@ -571,24 +561,21 @@ check_spr_hit_ret:
 	@@ Yが29でも31でもなかった場合
 	strne	r1, loopy_v
 
-	ldrb	r0, gba_line_1
-	add	r1, r0, #1
+	ldrb	r4, gba_line_1
+	add	r1, r4, #1
 	strb	r1, gba_line_1
-	cmp	r0, #160
-	movcs	pc, lr
+	cmp	r4, #160
+	ldmcsfd	sp!, {r4, pc}
 
 	adr	r1, scroll_value + 4
-	sub	r2, r2, r0, lsl #16
-	str	r2, [r1, r0, lsl #3]
+	sub	r2, r2, r4, lsl #16
+	str	r2, [r1, r4, lsl #3]
 
+	bl	update_tile_per_line
 	adr	r1, bg_cr_value + 2
-	ldr	r2, screen_size
-	orr	r2, r2, #GBA_BG_CR_MAP_ADDR(0x4)
-	tst	REG_P_REST, #P_REST_BG_ADR
-	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
-	add	r1, r1, r0, lsl #2
-	strh	r2, [r1]
-	mov	pc, lr
+	add	r1, r1, r4, lsl #2
+	strh	r0, [r1]
+	ldmfd	sp!, {r4, pc}
 
 @@@ 
 @@@ ラインごとのBG_CR0・BG_CR1の設定
@@ -604,9 +591,6 @@ bg_cr_value:
 
 scroll_value:	
 	.fill	160, 8, 0
-
-screen_size:	
-	.long	0
 
 	ALIGN
 
@@ -624,7 +608,7 @@ vbl_handler:
 	@@ DMA stop
 	mov	r1, #0
 	strh	r1, [r0, #GBA_DMAn_CR(0)]
-	adr	r1, gba_sprite
+	ldr	r1, =gba_sprite
 	str	r1, [r0, #GBA_DMAn_SRC(0)]
 	@@ DMA DST ← sprite ram
 	mov	r1, #0x07000000
@@ -682,914 +666,6 @@ vbl_handler:
 
 	.pool 
 
-
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@ 
-@@@ スプライトの変換
-@@@ 
-@@@ スプライトも縦方向に縮小しなければならない。
-@@@ スプライトRAMは読めないので元を保存する必要はない
-@@@ ただし，SPR #0 はヒットフラグで使うので必要
-@@@ 
-@@@ NES
-@@@ 0
-@@@ 76543210
-@@@ ++++++++---Y - 1
-@@@ 
-@@@ 1
-@@@ 76543210
-@@@ ++++++++---Tile #
-@@@ 
-@@@ 2
-@@@ 76543210
-@@@ ||||||++---Palette
-@@@ |||+++---Unused
-@@@ ||+---Priority (0=Front, 1=Behind)
-@@@ |+---H flip
-@@@ +---V flip
-@@@ 
-@@@ 3
-@@@ 76543210
-@@@ ++++++++---X
-@@@ 
-@@@ GBA
-@@@ 
-@@@ 0
-@@@ FEDCBA9876543210
-@@@ ||||||||++++++++---Y
-@@@ |||||||+---R	<= 1
-@@@ ||||||+---SD	<= 0
-@@@ ||||++---Mode	<= 0
-@@@ |||+---M		<= 0
-@@@ ||+---C		<= 0
-@@@ ++---Shape		<= 00 8x8, 01 8x16
-@@@ 
-@@@ 1
-@@@ FEDCBA9876543210
-@@@ |||||||+++++++++---X
-@@@ ||+++++---Rot	<= NES VH
-@@@ ++---Size		<= 0
-@@@ 
-@@@ 2
-@@@ FEDCBA9876543210
-@@@ ||||||++++++++++---Tile # 注意!!!
-@@@ ||||++---Priority
-@@@ ++++---Palette #
-@@@ 
-@@@ 
-@@@ Tile # は面倒な変換をしなければならない
-@@@ 
-@@@ SPR_SZ	SPR_ADR		9876543210
-@@@ 8x8		0		||++++++++---NES Tile#
-@@@				++---00
-@@@ 8x8		1		9876543210
-@@@				||++++++++---NES Tile#
-@@@				++---01
-@@@ 8x16	*		9876543210
-@@@				|||||||||+---0
-@@@				||+++++++---NES Tile# & 0xFE
-@@@				++---00(# & 1 == 0), 01(# & 1 == 1)
-
-nes_sprite_0:	
-nes_sprite:	.fill	64, 4, 0
-
-	.globl	spr_dma
-spr_dma:	
-	sub	REG_CYCLE, REG_CYCLE, #512
-	sub	REG_CYCLE, REG_CYCLE, #2
-	adr	r1, nes_sprite
-	mov	r2, #64
-1:	ldr	r3, [r0], #4
-	str	r3, [r1], #4
-	subs	r2, r2, #1
-	bne	1b
-	mov	pc, lr
-
-@@@ 
-@@@ $2003 に書く
-@@@ 
-
-ppu_reg_2003:	.byte	0
-	
-	ALIGN
-
-write_2003:	
-	strb	r0, ppu_reg_2003
-	mov	pc, lr
-
-@@@ 
-@@@ $2004 に書く
-@@@ 
-
-write_2004:
-	ldrb	r1, ppu_reg_2003
-	add	r2, r1, #1
-	strb	r2, ppu_reg_2003
-
-	adr	r3, nes_sprite
-	strb	r0, [r3, r1]
-
-	mov	pc, lr
-
-validate_spr:	
-	stmfd	sp!, {r4, r5, lr}
-	adr	r0, nes_sprite
-	adr	r1, gba_sprite
-	mov	r2, #64
-1:	
-	ldr	r3, [r0], #4
-	@@ Y
-	and	r5, r3, #255
-	sub	r5, r5, #15
-	add	r5, r5, r5, lsl #1
-	mov	r5, r5, lsr #2
-	strb	r5, [r1], #8
-
-	mov	r5, #0
-	tst	REG_P_REST, #P_REST_SPR_SZ
-	movne	r5, #0x80
-	strb	r5, [r1, #-7]
-
-	mov	r4, r3, lsr #24
-	sub	r4, r4, #8
-	bic	r4, r4, #0xFE00
-	and	r5, r3, #0xC0 << 16
-	orr	r4, r4, r5, lsr #10
-	strh	r4, [r1, #-6]
-
-	@@ test priority
-	tst	r3, #0x20 << 16
-	moveq	r4, #0
-	movne	r4, #0x0C00
-
-	and	r5, r3, #0x03 << 16
-	orr	r4, r4, r5, lsr #4
-
-	tst	REG_P_REST, #P_REST_SPR_ADR
-	moveq	r5, #0
-	movne	r5, #0x100
-	tst	REG_P_REST, #P_REST_SPR_SZ
-	movne	r5, r3
-	bicne	r3, r3, #0x0100
-	and	r5, r5, #0x100
-	orr	r4, r4, r5
-	and	r3, r3, #0xFF00
-	orr	r4, r4, r3, lsr #8
-	strh	r4, [r1, #-4]
-
-	subs	r2, r2, #1
-	bne	1b
-	ldmfd	sp!, {r4, r5, pc}
-
-gba_sprite:	
-	.fill	64, 8, 0
-
-init_gba_spr:	
-	mov	r0, #0x07000000
-	mov	r1, #128
-	@@ 全てのスプライトを消す
-	mov	r2, #160
-	mov	r3, #0
-1:
-	str	r2, [r0], #4
-	str	r3, [r0], #4
-	subs	r1, r1, #1
-	bne	1b
-
-	ldr	r0, =gba_sprite
-	mov	r1, #64
-	@@ Rフラグを立てる
-	mov	r2, #0x0100
-1:	
-	str	r3, [r0], #4
-	str	r3, [r0], #4
-	subs	r1, r1, #1
-	bne	1b
-#if 0
-	@@ 
-	@@ スプライトの縮小はなんか見た目がよくないので
-	@@ はずしておく
-	adr	r0, gba_sprite
-	mov	r1, #0x0100	@ X Scale
-	mov	r2, #0x00C0	@ Y Scale
-	mov	r3, #0
-	strh	r1, [r0, #6]
-	strh	r3, [r0, #14]
-	strh	r3, [r0, #22]
-	strh	r2, [r0, #30]
-	add	r0, r0, #32
-
-	mov	r1, #0xFF00	@ X Scale (flip)
-	mov	r2, #0x00C0	@ Y Scale
-	mov	r3, #0
-	strh	r1, [r0, #6]
-	strh	r3, [r0, #14]
-	strh	r3, [r0, #22]
-	strh	r2, [r0, #30]
-	add	r0, r0, #32
-
-	mov	r1, #0x0100	@ X Scale
-	mov	r2, #0xFF00	@ Y Scale (flip)
-	orr	r2, r2, #0x40
-	mov	r3, #0
-	strh	r1, [r0, #6]
-	strh	r3, [r0, #14]
-	strh	r3, [r0, #22]
-	strh	r2, [r0, #30]
-	add	r0, r0, #32
-
-	mov	r1, #0xFF00	@ X Scale (flip)
-	mov	r2, #0xFF00	@ Y Scale (flip)
-	orr	r2, r2, #0x40
-	mov	r3, #0
-	strh	r1, [r0, #6]
-	strh	r3, [r0, #14]
-	strh	r3, [r0, #22]
-	strh	r2, [r0, #30]
-#endif
-	mov	pc, lr
-
-@@@ 
-@@@ HITフラグをチェックする
-@@@ 
-@@@ r0 <= loopy_v
-@@@ r1 <= loopy_tx
-@@@ r2 <= スプライトのオフセット
-@@@ 
-check_spr_hit:	
-	stmfd	sp!, {r4, r5}
-	ldr	r3, nes_sprite_0
-
-	mov	r4, #7
-	tst	REG_P_REST, #P_REST_SPR_SZ
-	movne	r4, #15
-	@@ V Flip?
-	tst	r3, #0x800000
-	subne	r2, r4, r2	
-
-	@@ Tile #
-	and	r4, r3, #255 << 8
-	mov	r5, #0
-	tst	REG_P_REST, #P_REST_SPR_ADR
-	movne	r5, #0x100
-	tst	REG_P_REST, #P_REST_SPR_SZ
-	andne	r5, r4, #0x100
-	bicne	r4, r4, #0x100
-	cmp	r2, #8
-	addcs	r4, r4, #1
-	subcs	r2, r2, #8
-	add	r4, r5, r4, lsr #8
-	orr	r4, r2, r4, lsl #4
-	mov	r2, r4, lsr #10
-	adr	r5, tile_map
-	ldr	r2, [r5, r2, lsl #2]
-	ldrb	r4, [r2, r4]!
-	ldrb	r2, [r2, #8]
-	orrs	r2, r2, r4
-	@@ ちょっと手抜き
-	orrne	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT
-	ldmfd	sp!, {r4, r5}
-	b	check_spr_hit_ret
-@@@ 
-@@@ 途中まで書いたが面倒すぎる
-@@@ 
-#if 0
-	ldmfdeq	sp!, {r4, r5}
-	beq	check_spr_hit_ret
-
-	@@ r2がスプライトのビットマップ
-	tst	r3, #0x400000
-	beq	1f
-	@@ H flip
-	mov	r4, #0
-	tst	r2, #0x01;	orrne	r4, r4, #0x80
-	tst	r2, #0x02;	orrne	r4, r4, #0x40
-	tst	r2, #0x04;	orrne	r4, r4, #0x20
-	tst	r2, #0x08;	orrne	r4, r4, #0x10
-	tst	r2, #0x10;	orrne	r4, r4, #0x08
-	tst	r2, #0x20;	orrne	r4, r4, #0x04
-	tst	r2, #0x40;	orrne	r4, r4, #0x02
-	tst	r2, #0x80;	orrne	r4, r4, #0x01
-	mov	r2, r4
-1:	
-	mov	r4,     #0x04100000
-	orr	r4, r4, #0x000FE000
-	and	r1, r1, r4
-	bic	r0, r0, r4, lsr #16
-
-	@@ スプライトのX位置
-	and	r4, r3, #0xFF << 24
-	@@ X方向にスクロール
-	add	r1, r1, r4, lsr #11
-	tst	r1, r1, #0x20 << 16
-	@@ name table Xを反転
-	eorne	r1, r1, #0x0420 << 16
-	orr	r0, r1, r0, lsl #16
-
-	and	r1, r0, #0x0C00 << 16
-	adr	r5, map_table_map
-	ldr	r1, [r5, r1, lsr #24]
-	bic	r5, r0, #0xFC00 << 16
-	ldrb	r1, [r5, r1, lsr #15]
-	and	r5, r0, #0x7000 << 16
-	mov	r1, r1, lsl #4
-	add	r1, r1, r5, lsr #28
-	
-	adr	r4, tile_map
-	and	r5, r1, #0xFC00
-	orr	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT
-	ldmfd	sp!, {r4, r5}
-	b	check_spr_hit_ret
-#endif
-
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@ 
-@@@ タイルの変換
-@@@ 
-@@@ NESのタイルはVRAMの$0000-$1000と$1000-2000に置かれている
-@@@ これはBGとSPRで共通に使われるので，GBAのBG用タイルとSPR用
-@@@ タイルの両方にコピーしなければならない。
-@@@ 
-@@@ BGのタイルは
-@@@ 0600_0000-0600_2000
-@@@ 0600_4000-0600_6000
-@@@ に置く
-@@@ 
-@@@ SPRのタイルは
-@@@ 0601_0000-0601_2000
-@@@ 0601_2000-0601_4000
-@@@ に置く
-
-@@@ 
-@@@ タイル用のRAM
-@@@ FF3などの一部のゲームはCHR-ROMを持たず，かわりにこれを使う
-@@@ 
-	SECTION_SLOW
-	ALIGN
-tile_ram:
-	.fill	0x2000, 1, 0
-
-	SECTION_FAST
-	ALIGN
-
-@@@ 
-@@@ 0000-2000を8つにわける
-@@@ ひとつは0x400つまり64個
-@@@ 
-tile_map:
-	.long	tile_ram, tile_ram, tile_ram, tile_ram
-	.long	tile_ram, tile_ram, tile_ram, tile_ram
-
-@@@ 
-@@@ Mapperによってタイルが変更された場合は
-@@@ フレームごとに変更を確認する。前回のフレームで設定されていた
-@@@ メモリマップをここに保存しておく
-@@@ 
-@@@ DQ1などはCHR-ROMにもデータをもっていて，VBLの間にそれを読もうとする
-@@@ そこて，CHR-ROMの変更はフレームごとにチェックすることで，
-@@@ 画面がちらつくのを防ぐ
-@@@ 
-tile_map_old:	
-	.long	0, 0, 0, 0
-	.long	0, 0, 0, 0
-
-.macro	VALIDATE_LO	n
-	ldr	r0, tile_map     + \n * 4
-	ldr	r5, tile_map_old + \n * 4
-	teq	r0, r5
-	addeq	r1, r1, #0x800
-	strne	r0, tile_map_old + \n * 4
-	addne	r0, r0, #0x400 * \n
-	addne	r2, r1, #0x10000
-	blne	trans_tile_64
-.endm
-
-.macro	VALIDATE_HI	n
-	ldr	r0, tile_map     + \n * 4
-	ldr	r5, tile_map_old + \n * 4
-	teq	r0, r5
-	addeq	r1, r1, #0x800
-	strne	r0, tile_map_old + \n * 4
-	addne	r0, r0, #0x400 * \n
-	addne	r2, r1, #0xE000
-	blne	trans_tile_64
-.endm
-
-@@@ 
-@@@ タイルのデータを有効にする
-@@@ 
-validate_tile:
-	stmfd	sp!, {r4-r10, lr}
-	mov	r1, #0x06000000
-	VALIDATE_LO	0
-	VALIDATE_LO	1
-	VALIDATE_LO	2
-	VALIDATE_LO	3
-	add	r1, r1, #0x2000
-	VALIDATE_HI	4
-	VALIDATE_HI	5
-	VALIDATE_HI	6
-	VALIDATE_HI	7
-	ldmfd	sp!, {r4-r10, pc}
-
-
-@@@ 
-@@@ $2007経由でタイルを読む
-@@@ 
-@@@ r1	=> アドレス
-@@@ r0	<= *r3 = read_2007_buffer
-@@@ *r3 <= 結果
-read_tile:
-	mov	r2, r1, lsr #10
-	adr	r0, tile_map
-	ldr	r0, [r0, r2, lsl #2]
-	ldrb	r0, [r0, r1]
-	swpb	r0, r0, [r3]
-	mov	pc, lr
-
-@@@ 
-@@@ $2007経由でタイルに書く
-@@@ 
-write_tile:
-	mov	r2, r1, lsr #10
-	adr	r3, tile_map
-	ldr	r3, [r3, r2, lsl #2]
-	strb	r0, [r3, r1]
-	mov	r0, #0
-	adr	r3, tile_map_old
-	str	r0, [r3, r2, lsl #2]
-	mov	pc, lr
-
-
-	.globl	set_vram_bank_0to7
-set_vram_bank_0to7:	
-	str	r0, tile_map + 4 * 0
-	str	r0, tile_map + 4 * 1
-	str	r0, tile_map + 4 * 2
-	str	r0, tile_map + 4 * 3
-	str	r0, tile_map + 4 * 4
-	str	r0, tile_map + 4 * 5
-	str	r0, tile_map + 4 * 6
-	str	r0, tile_map + 4 * 7
-	mov	pc, lr
-
-	.globl	get_tile_map
-get_tile_map:	
-	adr	r0, tile_map
-	mov	pc, lr
-
-@@@ 
-@@@ タイルを64個変換する
-@@@ 
-@@@ r0	=> SRC
-@@@ r1	=> DST1
-@@@ r2	=> DST2
-@@@ 
-@@@ r0	<= SRC + 0x400
-@@@ r1	<= DST1 + 0x800
-@@@ r2	<= DST2 + 0x800
-@@@ r3-r10 を壊す
-@@@ 
-.macro	TRANS_LINE	reg1, reg2, mask, shift
-	and	r8, \reg1, #\mask
-	ldr	r9, [r3, r8, \shift]
-	and	r8, \reg2, #\mask
-	ldr	r8, [r3, r8, \shift]
-	orr	r8, r9, r8, lsl #1
-	str	r8, [r1], #4
-	str	r8, [r2], #4
-.endm
-trans_tile_64:	
-	adr	r3, tile_translate_table
-
-	mov	r10, #64
-1:	
-	@@ タイルをひとつロード
-	@@ ROMからのロードはLDMを使ってシーケンシャルに
-	@@ やると速い
-	ldmia	r0!, {r4-r7}
-
-	TRANS_LINE	r4, r6, 0x000000FF, lsl #2
-	TRANS_LINE	r4, r6, 0x0000FF00, lsr #6
-	TRANS_LINE	r4, r6, 0x00FF0000, lsr #14
-	TRANS_LINE	r4, r6, 0xFF000000, lsr #22
-
-	TRANS_LINE	r5, r7, 0x000000FF, lsl #2
-	TRANS_LINE	r5, r7, 0x0000FF00, lsr #6
-	TRANS_LINE	r5, r7, 0x00FF0000, lsr #14
-	TRANS_LINE	r5, r7, 0xFF000000, lsr #22
-
-	subs	r10, r10, #1
-	bne	1b
-
-	mov	pc, lr
-
-
-	ALIGN
-tile_translate_table:	
-	.fill	256, 4, 0
-
-	SECTION_SLOW
-	ALIGN
-
-@@@ 
-@@@ タイルの変換はテーブルを使う
-@@@ 
-@@@    NES   =>  GBA
-@@@ ABCDEFGH => 000H 000G 000F 000E 000D 000C 000B 000A
-@@@ を行うテーブル(byte → word)を作っておく
-@@@ 
-init_tile_trans_table:	
-	@@ 
-	@@ タイルの変換テーブルを初期化する
-	@@ 
-	ldr	r1, =tile_translate_table
-	mov	r2, #0
-1:	
-	mov	r3, #0
-
-	tst	r2, #0x80;  orrne	r3, r3, #0x00000001
-	tst	r2, #0x40;  orrne	r3, r3, #0x00000010
-	tst	r2, #0x20;  orrne	r3, r3, #0x00000100
-	tst	r2, #0x10;  orrne	r3, r3, #0x00001000
-	tst	r2, #0x08;  orrne	r3, r3, #0x00010000
-	tst	r2, #0x04;  orrne	r3, r3, #0x00100000
-	tst	r2, #0x02;  orrne	r3, r3, #0x01000000
-	tst	r2, #0x01;  orrne	r3, r3, #0x10000000
-
-	str	r3, [r1], #4
-	add	r2, r2, #1
-	teq	r2, #256
-	bne	1b
-
-	mov	pc, lr
-
-	SECTION_FAST
-	ALIGN
-
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@ 
-@@@ パレットの変換
-@@@ 
-@@@ パレットは読み書きできるので，読むときにそなえてコピーを
-@@@ とっておかなければならない。
-@@@ それと同時にGBAのパレットRAMにも書き込む。
-@@@ 
-
-	ALIGN
-bg_palette:
-	.fill	0x16, 1, 0
-spr_palette:	
-	.fill	0x16, 1, 0
-	
-	ALIGN
-
-@@@ 
-@@@ $2007経由でパレットを読む
-@@@ 
-@@@ r1	=> VRAMアドレス 
-@@@ r0	<= 結果
-read_palette:	
-	and	r1, r1, #0x1F
-	adr	r0, bg_palette
-	ldrb	r0, [r0, r1]
-	mov	pc, lr
-
-@@@ 
-@@@ $2007経由でパレットに書く
-@@@ 
-@@@ r0	=> 書くバイト
-@@@ r1	=> VRAMアドレス
-@@@ 
-@@@ GBAのパレットは0500_0000にあり
-@@@ BGのパレットが256エントリ
-@@@ SPRのパレットが256エントリある
-@@@ 
-@@@ NESのパレットは4*4で
-@@@ GBAのパレットは16*16
-@@@ 
-write_palette:	
-	@@ とりあえずコピーをとる
-	and	r0, r0, #0x3F
-	and	r1, r1, #0x1F
-	adr	r2, bg_palette
-	strb	r0, [r2, r1]
-	@@ パレット0はミラーされている
-	tst	r1, #0xF
-	eoreq	r1, r1, #0x10
-	streqb	r0, [r2, r1]
-	biceq	r1, r1, #0x10
-
-	@@ 色を変換する
-	adr	r2, nes_palette
-	ldr	r0, [r2, r0, lsl #2]
-
-	@@ パレット位置を変換する
-	adr	r2, palette_map
-	ldr	r1, [r2, r1, lsl #2]
-	strh	r0, [r1]
-
-	mov	pc, lr
-
-	ALIGN
-
-palette_map:	
-#define P(n)	0x05000000 + n
-	.long	P(0x00),  P(0x02), P(0x04), P(0x06)
-	.long	P(0x20),  P(0x22), P(0x24), P(0x26)
-	.long	P(0x40),  P(0x42), P(0x44), P(0x46)
-	.long	P(0x60),  P(0x62), P(0x64), P(0x66)
-#undef P
-#define P(n)	0x05000000 + n + 512
-	.long	P(0x00),  P(0x02), P(0x04), P(0x06)
-	.long	P(0x20),  P(0x22), P(0x24), P(0x26)
-	.long	P(0x40),  P(0x42), P(0x44), P(0x46)
-	.long	P(0x60),  P(0x62), P(0x64), P(0x66)
-#undef P
-	
-	ALIGN
-
-#include "palette.S"
-
-	ALIGN
-
-
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@ 
-@@@ マップテーブルの変換
-@@@ 
-@@@ マップテーブルへの書き込みは直接VRAMに書く
-@@@ 読み出しもVRAMから直接読む
-@@@ 
-@@@ 最大4つのマップテーブルが使える。4つの場合は
-@@@ 2000-2400	=> 06002000
-@@@ 2400-2800	=> 06002800
-@@@ 2800-2C00	=> 06003000
-@@@ 2C00-3000	=> 06003800
-@@@ のように対応させる。
-@@@ 
-@@@ ミラーリングのためテーブルが必要
-@@@ 
-@@@ テーブルへのエントリは次のように変換する
-@@@ NES
-@@@ 
-@@@ 00
-@@@ ||++---属性
-@@@ ||||0000
-@@@ |||||||| ++++++++---タイル番号
-@@@ FEDCBA98 76543210
-@@@ ||||||++-++++++++---タイル番号
-@@@ ||||++---V・Hフリップ
-@@@ ++++---パレット番号
-@@@ 
-@@@ GBA
-@@@ このように変換した場合，マップへの書き込みは
-@@@ VRAMへの1バイト書き込みになるので，読んでから書かないといけない
-@@@ 
-
-
-	ALIGN
-
-map_table_map:	
-	.long	0x06002000
-	.long	0x06002800
-	.long	0x06003000
-	.long	0x06003800
-
-
-	ALIGN
-
-	.globl	set_v_scroll
-	.globl	set_h_scroll
-	.globl	set_4_scroll
-
-set_h_scroll:	
-	mov	r0, #GBA_BG_CR_SIZE_512x256
-	str	r0, screen_size
-
-	mov	r0, #0x06000000
-	adr	r1, map_table_map
-	add	r0, r0, #0x2000
-	str	r0, [r1]
-	str	r0, [r1, #8]
-	add	r0, r0, #0x800
-	str	r0, [r1, #4]
-	str	r0, [r1, #12]
-	mov	pc, lr
-
-set_v_scroll:	
-	mov	r0, #GBA_BG_CR_SIZE_256x512
-	str	r0, screen_size
-
-	mov	r0, #0x06000000
-	adr	r1, map_table_map
-	add	r0, r0, #0x2000
-	str	r0, [r1]
-	str	r0, [r1, #4]
-	add	r0, r0, #0x800
-	str	r0, [r1, #8]
-	str	r0, [r1, #12]
-	mov	pc, lr
-
-set_4_scroll:	
-	mov	r0, #GBA_BG_CR_SIZE_512x512
-	str	r0, screen_size
-
-	mov	r0, #0x06000000
-	adr	r1, map_table_map
-	add	r0, r0, #0x2000
-	str	r0, [r1]
-	add	r0, r0, #0x800
-	str	r0, [r1, #4]
-	add	r0, r0, #0x800
-	str	r0, [r1, #8]
-	add	r0, r0, #0x800
-	str	r0, [r1, #12]
-	mov	pc, lr
-
-@@@ 
-@@@ $2007経由でマップまたは属性を読む
-@@@ 
-@@@ r1	=> アドレス(000-3C0)
-@@@ r2	=> マップ番号(0-3)
-@@@ r0	<= *r3 = read_2007_buffer
-@@@ *r3	<= 結果
-read_map:	
-	adr	r0, map_table_map
-	ldr	r0, [r0, r2, lsl #2]
-	ldrb	r0, [r0, r1, lsl #1]
-	swpb	r0, r0, [r3]
-	mov	pc, lr
-
-@@@ 
-@@@ $2007経由でマップに書く
-@@@ 
-@@@ r0	=> 書くバイト
-@@@ r1	=> アドレス(000-3C0)
-@@@ r2	=> マップ番号(0-3)
-write_map:	
-	@@ 属性テーブルに書こうとしている？
-	cmp	r1, #0x3C0
-	adr	r3, map_table_map
-	ldr	r3, [r3, r2, lsl #2]
-	add	r3, r3, r1, lsl #1
-	@@ ロードできるかな？
-	ldrb	r2, [r3, #1]
-	orr	r2, r0, r2, lsl #8
-	strh	r2, [r3]
-	movcc	pc, lr
-	sub	r3, r3, r1, lsl #1
-	b	write_attr
-
-
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@ 
-@@@ 属性テーブルの変換
-@@@ 
-@@@ これが一番めんどうな仕事である。
-@@@ 
-@@@ 
-@@@ 属性が DDBBCCAA なら
-@@@ 
-@@@ AA AA BB BB
-@@@ 
-@@@ AA AA BB BB
-@@@ 
-@@@ CC CC DD DD
-@@@ 
-@@@ CC CC DD DD
-@@@ 
-@@@ のようになる。
-@@@ 
-@@@ 属性は読むことができるがVRAMから読むのは辛いので
-@@@ 別に保存しておかなければならない
-@@@ 
-
-#if 0
-@@@ 
-@@@ $2007経由で属性を読む
-@@@ 
-@@@ r1	=> アドレス(3C0-400)
-@@@ r2	=> マップ番号(0-3)
-@@@ r0	<= *r3 = read_2007_buffer
-@@@ *r3	<= 結果
-read_attr:	
-	and	r1, r1, #0x3F
-	adr	r0, attr_table
-	ldr	r0, [r0, r2, lsl #2]
-	ldrb	r0, [r0, r1]
-	swpb	r0, r0, [r3]
-	mov	pc, lr
-#endif
-
-@@@ 
-@@@ $2007経由で属性を書く
-@@@ 
-@@@ r0	=> 書く値
-@@@ r1	=> アドレス(3C0-400)
-@@@ r2	=> マップ番号(0-3)
-write_attr:	
-	stmfd	sp!, {r4, lr}
-
-	and	r1, r1, #0x3F
-#if 0
-	adr	r3, attr_map
-	ldr	r3, [r3, r2, lsl #2]
-	strb	r0, [r3, r1]
-	
-	adr	r3, map_table_map
-	ldr	r3, [r3, r2, lsl #2]
-#endif
-	adr	r2, attr_index_map
-	ldr	r2, [r2, r1, lsl #2]
-
-
-	mov	r4, #0x3000
-	orr	r4, r4, r4, lsl #16
-	
-	orr	r0, r0, r0, lsl #16
-	@@ 
-	@@ r0	00000000DDCCBBAA 00000000DDCCBBAA
-	@@ r4	0011000000000000 0011000000000000
-
-	@@ A	00AA000000000000 00AA000000000000
-	and	r1, r4, r0, lsl #12
-
-	ldr	lr, [r3, r2]!
-	bic	lr, lr, r4
-	orr	lr, lr, r1
-	str	lr, [r3]
-
-	ldr	lr, [r3, #64]
-	bic	lr, lr, r4
-	orr	lr, lr, r1
-	str	lr, [r3, #64]
-
-	@@ 	00000000DDCCBBAA 00000000DDCCBBAA
-	@@ B	00BB000000000000 00BB000000000000
-	and	r1, r4, r0, lsl #10
-
-	ldr	lr, [r3, #4]
-	bic	lr, lr, r4
-	orr	lr, lr, r1
-	str	lr, [r3, #4]
-
-	ldr	lr, [r3, #68]
-	bic	lr, lr, r4
-	orr	lr, lr, r1
-	str	lr, [r3, #68]
-
-	@@ 	00000000DDCCBBAA 00000000DDCCBBAA
-	@@ C	00CC000000000000 00CC000000000000
-	and	r1, r4, r0, lsl #8
-
-	ldr	lr, [r3, #128]
-	bic	lr, lr, r4
-	orr	lr, lr, r1
-	str	lr, [r3, #128]
-
-	ldr	lr, [r3, #192]
-	bic	lr, lr, r4
-	orr	lr, lr, r1
-	str	lr, [r3, #192]
-
-	@@ 	00000000DDCCBBAA 00000000DDCCBBAA
-	@@ D	00DD000000000000 00DD000000000000
-	and	r1, r4, r0, lsl #6
-
-	ldr	lr, [r3, #132]
-	bic	lr, lr, r4
-	orr	lr, lr, r1
-	str	lr, [r3, #132]
-
-	ldr	lr, [r3, #196]
-	bic	lr, lr, r4
-	orr	lr, lr, r1
-	str	lr, [r3, #196]
-
-	ldmfd	sp!, {r4, pc}
-
-@@@ 
-@@@ 属性を適用するマップの左上の端のアドレス
-@@@ 
-attr_index_map:
-#define P(y, x) ((y * 0x80 + x * 4) * 2)
-	.long P(0,0), P(0,1), P(0,2), P(0,3), P(0,4), P(0,5), P(0,6), P(0,7)
-	.long P(1,0), P(1,1), P(1,2), P(1,3), P(1,4), P(1,5), P(1,6), P(1,7)
-	.long P(2,0), P(2,1), P(2,2), P(2,3), P(2,4), P(2,5), P(2,6), P(2,7)
-	.long P(3,0), P(3,1), P(3,2), P(3,3), P(3,4), P(3,5), P(3,6), P(3,7)
-	.long P(4,0), P(4,1), P(4,2), P(4,3), P(4,4), P(4,5), P(4,6), P(4,7)
-	.long P(5,0), P(5,1), P(5,2), P(5,3), P(5,4), P(5,5), P(5,6), P(5,7)
-	.long P(6,0), P(6,1), P(6,2), P(6,3), P(6,4), P(6,5), P(6,6), P(6,7)
-	.long P(7,0), P(7,1), P(7,2), P(7,3), P(7,4), P(7,5), P(7,6), P(7,7)
-#undef P
-
-	ALIGN
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

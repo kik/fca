@@ -49,21 +49,40 @@ init_mapper3:
 	ldr	r0, =chr_rom_start
 	ldr	r0, [r0]
 	str	r0, m3_chr_rom
+	ldr	r0, =n_chr_rom
+	ldr	r0, [r0]
+	sub	r0, r0, #1
+	str	r0, m3_n_chr_rom
 	adr	r0, m3_write_rom
 	b	install_rom_write_handler
 
 m3_chr_rom:	.long	0
+m3_n_chr_rom:	.long	0
 
 m3_write_rom:
-	and	r0, r0, #3
-	ldr	r1, m3_chr_rom
-	add	r0, r1, r0, lsl #13
+	ldr	r1, m3_n_chr_rom
+	and	r1, r0, r1
+	ldr	r0, m3_chr_rom
+	add	r0, r0, r1, lsl #13
+
+	add	r3, r1, #1
+	orr	r1, r1, r3, lsl #8
+	add	r3, r3, #1
+	orr	r1, r1, r3, lsl #16
+	add	r3, r3, #1
+	orr	r1, r1, r3, lsl #24
+
+	add	r3, r3, #1
+	mov	r2, r3
+	add	r3, r3, #1
+	orr	r2, r2, r3, lsl #8
+	add	r3, r3, #1
+	orr	r2, r2, r3, lsl #16
+	add	r3, r3, #1
+	orr	r2, r2, r3, lsl #24
 	b	set_vram_bank_0to7
-	mov	pc, lr
 
 	.pool
-
-
 
 	.section mapper4, "awx"
 init_mapper4:	
@@ -94,7 +113,7 @@ init_mapper4:
 	adr	r0, m4_write_rom
 	bl	install_rom_write_handler
 	bl	m4_set_cpu_banks
-	bl	m4_set_ppu_banks
+	@bl	m4_set_ppu_banks
 
 	adr	r0, m4_hsync
 	bl	install_hsync_handler
@@ -114,12 +133,14 @@ m4_prg1:	.long	0
 m4_n_chr_rom:	.long	0
 m4_chr_rom:	.long	0
 
-m4_chr01:	.long	0
-m4_chr23:	.long	2
-m4_chr4:	.long	4
-m4_chr5:	.long	5
-m4_chr6:	.long	6
-m4_chr7:	.long	7
+m4_chr0:	.byte	0
+m4_chr1:	.byte	1
+m4_chr2:	.byte	2
+m4_chr3:	.byte	3
+m4_chr4:	.byte	4
+m4_chr5:	.byte	5
+m4_chr6:	.byte	6
+m4_chr7:	.byte	7
 
 m4_enb_irq:	.long	0
 
@@ -128,19 +149,15 @@ m4_write_rom:
 	and	r1, REG_ADDR, #0xE000
 	bne	1f
 	teq	r1, #0x8000;	beq	m4_write_8000
-#if 1
 	teq	r1, #0xA000;	beq	m4_write_A000
 	teq	r1, #0xC000;	beq	m4_write_C000
 	teq	r1, #0xE000;	beq	m4_write_E000
-#endif
 	mov	pc, lr
 1:	
 	teq	r1, #0x8000;	beq	m4_write_8001
-#if 1
 	teq	r1, #0xA000;	beq	m4_write_A001
 	teq	r1, #0xC000;	beq	m4_write_C001
 	teq	r1, #0xE000;	beq	m4_write_E001
-#endif
 	mov	pc, lr
 
 m4_write_8000:
@@ -155,25 +172,63 @@ m4_write_8001:
 	nop
 	.long	0f, 1f, 2f, 3f, 4f, 5f, 6f, 7f
 0:
+	ldr	r1, m4_n_chr_rom
+	teq	r1, #0
+	moveq	pc, lr
 	and	r0, r0, #0xFE
-	str	r0, m4_chr01
-	b	m4_set_ppu_banks
+	orr	r1, r0, r0, lsl #8
+	add	r1, r1, #1
+	strh	r1, m4_chr0
+	ldr	r2, m4_chr_rom
+	add	r0, r2, r0, lsl #10
+	b	set_vram_bank_0to1
 1:	
+	ldr	r1, m4_n_chr_rom
+	teq	r1, #0
+	moveq	pc, lr
 	and	r0, r0, #0xFE
-	str	r0, m4_chr23
-	b	m4_set_ppu_banks
+	orr	r1, r0, r0, lsl #8
+	add	r1, r1, #1
+	strh	r1, m4_chr2
+	ldr	r2, m4_chr_rom
+	add	r0, r2, r0, lsl #10
+	b	set_vram_bank_2to3
 2:	
-	str	r0, m4_chr4
-	b	m4_set_ppu_banks
+	ldr	r1, m4_n_chr_rom
+	teq	r1, #0
+	moveq	pc, lr
+	strb	r0, m4_chr4
+	mov	r1, r0
+	ldr	r2, m4_chr_rom
+	add	r0, r2, r0, lsl #10
+	b	set_vram_bank_4
 3:	
-	str	r0, m4_chr5
-	b	m4_set_ppu_banks
+	ldr	r1, m4_n_chr_rom
+	teq	r1, #0
+	moveq	pc, lr
+	strb	r0, m4_chr5
+	mov	r1, r0
+	ldr	r2, m4_chr_rom
+	add	r0, r2, r0, lsl #10
+	b	set_vram_bank_5
 4:	
-	str	r0, m4_chr6
-	b	m4_set_ppu_banks
+	ldr	r1, m4_n_chr_rom
+	teq	r1, #0
+	moveq	pc, lr
+	strb	r0, m4_chr6
+	mov	r1, r0
+	ldr	r2, m4_chr_rom
+	add	r0, r2, r0, lsl #10
+	b	set_vram_bank_6
 5:	
-	str	r0, m4_chr7
-	b	m4_set_ppu_banks
+	ldr	r1, m4_n_chr_rom
+	teq	r1, #0
+	moveq	pc, lr
+	strb	r0, m4_chr7
+	mov	r1, r0
+	ldr	r2, m4_chr_rom
+	add	r0, r2, r0, lsl #10
+	b	set_vram_bank_7
 
 6:	
 	ldr	r1, m4_prg_rom
@@ -257,6 +312,7 @@ m4_set_cpu_banks:
 
 	ldmfd	sp!, {pc}
 
+#if 0
 m4_set_ppu_banks:
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
@@ -299,7 +355,7 @@ m4_set_ppu_banks:
 
 	ldmfd	sp!, {lr}
 
-
+#endif
 m4_hsync:	
 	ldr	r1, m4_enb_irq
 	teq	r1, #0

@@ -27,11 +27,18 @@ chr_rom_start:	.long	0
 
 init_mapper:	
 	stmfd	sp!, {lr}
-	ldr	r0, chr_rom_start
+
 	ldr	r1, n_chr_rom
 	teq	r1, #0
-	blne	set_vram_bank_0to7
+	orreq	REG_P_REST, REG_P_REST, #P_REST_HAS_VRAM
+	beq	1f
 
+	ldr	r0, chr_rom_start
+	ldr	r1, = 0x03020100
+	ldr	r2, = 0x07060504
+	bl	set_vram_bank_0to7
+
+1:	
 	ldr	r1, n_prg_rom
 	teq	r1, #1
 	beq	1f
@@ -80,3 +87,5 @@ init_mapper:
 
 	bl	_start_mapper
 	ldmfd	sp!, {pc}
+
+	.pool

@@ -1760,7 +1760,10 @@ cpu_reset:
 	stmfd	sp!, {lr}
 	mov	REG_NZ, #0
 	@@ REG_P_RESET の上8ビットはSなのでマスクしないと
-	and	REG_P_REST, REG_P_REST, #0xFF << 24
+	@@ P_REST_HAS_VRAM もマスクしないと
+	mov	r0, #0xFF << 24
+	orr	r0, r0, #P_REST_HAS_VRAM
+	and	REG_P_REST, REG_P_REST, r0
 	orr	REG_P_REST, REG_P_REST, #P_REST_I_FLAG
 	mov	REG_ADDR, #0x10000
 	sub	REG_ADDR, REG_ADDR, #RESET_VECTOR

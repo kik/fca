@@ -28,7 +28,7 @@ void *
 select_nes_file(struct file *f)
 {
   struct file *p = (struct file *)&_rom_end;
-  int *key = (int *)0x04000130;
+  volatile int *key = (int *)0x04000130;
 
   while (p->length) {
     char *q;

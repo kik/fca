@@ -9,7 +9,9 @@ OBJCOPY = $(CROSS_COMPILE)objcopy
 
 CPPFLAGS = -I../include -D__ASSEMBLY__
 
-SRC = main.S cpu.S mapper.S ppu.S pad.S apu.o
+SRC = main.S cpu.S mapper.S ppu.S ppu-map.S ppu-palette.S \
+      ppu-spr.S ppu-tile.S pad.S apu.S
+
 OBJ = $(SRC:.S=.o)
 
 SUBDIR = mapper

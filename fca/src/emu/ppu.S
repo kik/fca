@@ -236,16 +236,14 @@ read_2007:
 	ldr	r0, read_2007_buffer	
 
 	cmp	r1, #0x2000
-	@bcs	read_tile
-	movcc	pc, lr
+	bcc	read_tile
 
 	bic	r1, r1, #0x3000
 	mov	r2, r1, lsr #10
 	bic	r1, r1, #0xC00
 
 	cmp	r1, #0x3C0
-	@bcs	read_attr
-	movcs	pc, lr
+	bcs	read_attr
 	b	read_map
 
 @@@ 
@@ -265,27 +263,15 @@ write_2007:
 	bcs	write_palette
 
 	cmp	r1, #0x2000
-	@bcs	write_tile
-	movcc	pc, lr
+	bcc	write_tile
 
 	bic	r1, r1, #0x3000
 	mov	r2, r1, lsr #10
 	bic	r1, r1, #0xC00
 
 	cmp	r1, #0x3C0
-	@bcs	write_attr
-	movcs	pc, lr
+	bcs	write_attr
 	b	write_map
-
-	mov	pc, lr
-	mov	r2, r0
-	adr	r0, 1f
-	b	emu_printf
-	
-1:	.string "write 2007 %x %x\n"
-	ALIGN
-
-
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -318,6 +304,27 @@ write_2007:
 tile_map:
 	.long	0, 0, 0, 0
 	.long	0, 0, 0, 0
+
+
+@@@ 
+@@@ $2007経由でタイルを読む
+@@@ 
+@@@ r1	=> アドレス
+@@@ r0	<= 結果
+read_tile:
+	mov	r2, r1, lsr #10
+	adr	r3, tile_map
+	ldr	r3, [r3, r2, lsl #2]
+	ldrb	r1, [r3, r1]
+	strb	r1, read_2007_buffer
+	mov	pc, lr
+
+@@@ 
+@@@ $2007経由でタイルに書くのを実装しないといけない
+@@@ 
+write_tile:	mov	pc, lr
+
+
 
 .macro	SET_TILE_BANK_LO	n
 	ldr	r1, tile_map + (4 * \n)
@@ -617,6 +624,163 @@ write_map:
 	orr	r2, r0, r2, lsl #8
 	strh	r2, [r1]
 	mov	pc, lr
+
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ 属性テーブルの変換
+@@@ 
+@@@ これが一番めんどうな仕事である。
+@@@ 
+@@@ 
+@@@ 属性が DDBBCCAA なら
+@@@ 
+@@@ AA AA BB BB
+@@@ 
+@@@ AA AA BB BB
+@@@ 
+@@@ CC CC DD DD
+@@@ 
+@@@ CC CC DD DD
+@@@ 
+@@@ のようになる。
+@@@ 
+@@@ 属性は読むことができるがVRAMから読むのは辛いので
+@@@ 別に保存しておかなければならない
+@@@ 
+
+@@@ 
+@@@ $2007経由で属性を読む
+@@@ 
+@@@ r1			=> アドレス(3C0-400)
+@@@ r2			=> マップ番号(0-3)
+@@@ read_2007_buffer	<= 結果
+read_attr:	
+	and	r1, r1, #0x3F
+	adr	r3, attr_table
+	ldr	r3, [r3, r2, lsl #2]
+	ldrb	r3, [r3, r1]
+	strb	r3, read_2007_buffer
+	mov	pc, lr
+
+
+@@@ 
+@@@ $2007経由で属性を書く
+@@@ 
+@@@ r0	=> 書く値
+@@@ r1	=> アドレス(3C0-400)
+@@@ r2	=> マップ番号(0-3)
+write_attr:	
+	stmfd	sp!, {r4, lr}
+	and	r1, r1, #0x3F
+	adr	r3, attr_map
+	ldr	r3, [r3, r2, lsl #2]
+	strb	r0, [r3, r1]
+	
+	adr	r3, map_table_map
+	ldr	r3, [r3, r2, lsl #2]
+
+	adr	r2, attr_index_map
+	ldr	r2, [r2, r1, lsl #2]
+
+
+	mov	r4, #0x3000
+	orr	r4, r4, r4, lsl #16
+	
+	orr	r0, r0, r0, lsl #16
+	@@ 
+	@@ r0	00000000DDCCBBAA 00000000DDCCBBAA
+	@@ r4	0011000000000000 0011000000000000
+
+	@@ A	00AA000000000000 00AA000000000000
+	and	r1, r4, r0, lsl #12
+
+	ldr	lr, [r3, r2]!
+	bic	lr, lr, r4
+	orr	lr, lr, r1
+	str	lr, [r3]
+
+	ldr	lr, [r3, #64]
+	bic	lr, lr, r4
+	orr	lr, lr, r1
+	str	lr, [r3, #64]
+
+	@@ 	00000000DDCCBBAA 00000000DDCCBBAA
+	@@ B	00BB000000000000 00BB000000000000
+	and	r1, r4, r0, lsl #10
+
+	ldr	lr, [r3, #4]
+	bic	lr, lr, r4
+	orr	lr, lr, r1
+	str	lr, [r3, #4]
+
+	ldr	lr, [r3, #68]
+	bic	lr, lr, r4
+	orr	lr, lr, r1
+	str	lr, [r3, #68]
+
+	@@ 	00000000DDCCBBAA 00000000DDCCBBAA
+	@@ C	00CC000000000000 00CC000000000000
+	and	r1, r4, r0, lsl #8
+
+	ldr	lr, [r3, #128]
+	bic	lr, lr, r4
+	orr	lr, lr, r1
+	str	lr, [r3, #128]
+
+	ldr	lr, [r3, #192]
+	bic	lr, lr, r4
+	orr	lr, lr, r1
+	str	lr, [r3, #192]
+
+	@@ 	00000000DDCCBBAA 00000000DDCCBBAA
+	@@ D	00DD000000000000 00DD000000000000
+	and	r1, r4, r0, lsl #6
+
+	ldr	lr, [r3, #132]
+	bic	lr, lr, r4
+	orr	lr, lr, r1
+	str	lr, [r3, #132]
+
+	ldr	lr, [r3, #196]
+	bic	lr, lr, r4
+	orr	lr, lr, r1
+	str	lr, [r3, #196]
+
+	ldmfd	sp!, {r4, pc}
+
+	ALIGN
+attr_table:
+	.fill	0x40, 1, 0
+	.fill	0x40, 1, 0
+	.fill	0x40, 1, 0
+	.fill	0x40, 1, 0
+	ALIGN
+attr_map:
+	.long	attr_table
+	.long	attr_table + 0x40
+	.long	attr_table + 0x80
+	.long	attr_table + 0xC0
+	ALIGN
+
+@@@ 
+@@@ 属性を適用するマップの左上の端のアドレス
+@@@ 
+attr_index_map:
+#define P(y, x) ((y * 0x80 + x * 4) * 2)
+	.long P(0,0), P(0,1), P(0,2), P(0,3), P(0,4), P(0,5), P(0,6), P(0,7)
+	.long P(1,0), P(1,1), P(1,2), P(1,3), P(1,4), P(1,5), P(1,6), P(1,7)
+	.long P(2,0), P(2,1), P(2,2), P(2,3), P(2,4), P(2,5), P(2,6), P(2,7)
+	.long P(3,0), P(3,1), P(3,2), P(3,3), P(3,4), P(3,5), P(3,6), P(3,7)
+	.long P(4,0), P(4,1), P(4,2), P(4,3), P(4,4), P(4,5), P(4,6), P(4,7)
+	.long P(5,0), P(5,1), P(5,2), P(5,3), P(5,4), P(5,5), P(5,6), P(5,7)
+	.long P(6,0), P(6,1), P(6,2), P(6,3), P(6,4), P(6,5), P(6,6), P(6,7)
+	.long P(7,0), P(7,1), P(7,2), P(7,3), P(7,4), P(7,5), P(7,6), P(7,7)
+#undef P
+	ALIGN
+
+
 
 #if 0
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1158,6 +1322,7 @@ ppu_start_frame:
 	.globl	ppu_end_vbl
 ppu_start_vbl:	
 	orr	REG_P_REST, REG_P_REST, #P_REST_IN_VBL
+	orr	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT	
 	mov	pc, lr
 
 ppu_end_vbl:	

@@ -51,7 +51,7 @@ start_shell(void)
   init_file_system();
   init_text_console(0, 2, 0x1C);
 
-  _ioreg[0] = 0x0340;
+  _ioreg[0] = 0x0140;
   _ioreg[5] = 0x0704;
   _ioreg[0x102] = 0x4000;
   for (i = 0; i < 32 * 32; i++)

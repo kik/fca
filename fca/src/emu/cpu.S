@@ -497,7 +497,7 @@ op98:	@ TYA
 opBA:	@ TSX
 	IMPLIED
 	and	REG_P, REG_P, #ARM_C_FLAG
-	cmp	REG_S, #0
+	ands	REG_S, REG_S, #0xFF << 24
 	orreq	REG_P, REG_P, #ARM_Z_FLAG
 	orrmi	REG_P, REG_P, #ARM_N_FLAG
 	mov	REG_X, REG_S, lsr #24
@@ -505,7 +505,8 @@ opBA:	@ TSX
 
 op9A:	@ TXS
 	IMPLIED
-	mov	REG_S, REG_X, lsl #24
+	bic	REG_S, REG_S, #0xFF << 24
+	orr	REG_S, REG_S, REG_X, lsl #24
 	CYCLE_NEXT	2
 
 
@@ -673,7 +674,7 @@ op85:	@ STA $nn
 	CYCLE_NEXT	3
 
 op95:	@ STA $nn, X
-	ZERO_ADDR; OP_STA
+	ZEROX_ADDR; OP_STA
 	ZP_WRITE
 	CYCLE_NEXT	4
 
@@ -1210,15 +1211,25 @@ op2C:	@ BIT $nnnn
 	MRS_P
 .endm
 
+.macro	OP_ASL_A
+	movs	REG_A, REG_A, lsl #1
+	MRS_P
+.endm
+
 .macro	OP_LSR
 	movs	r0, r0, lsr #1
 	MRS_P
 .endm
 
+.macro	OP_LSR_A
+	movs	REG_A, REG_A, lsr #25
+	mov	REG_A, REG_A, lsl #24
+	MRS_P
+.endm	
+
 op0A:	@ ASL A
 	IMPLIED
-	movs	REG_A, REG_A, lsl #1
-	MRS_P
+	OP_ASL_A
 	CYCLE_NEXT	2
 
 op06:	@ ASL $nn
@@ -1245,9 +1256,7 @@ op1E:	@ ASL $nnnn, X
 
 op4A:	@ LSR A
 	IMPLIED
-	movs	REG_A, REG_A, lsr #25
-	mov	REG_A, REG_A, lsl #24
-	MRS_P
+	OP_LSR_A
 	CYCLE_NEXT	2
 
 op46:	@ LSR $nn
@@ -1291,6 +1300,14 @@ op5E:	@ LSR $nnnn, X
 	MRS_P
 .endm
 
+.macro	OP_ROL_A
+	tst	REG_P, #ARM_C_FLAG
+	movne	r1, #1 << 24
+	moveq	r1, #0
+	orrs	REG_A, r1, REG_A, lsl #1
+	MRS_P
+.endm
+
 .macro	OP_ROR
 	tst	REG_P, #ARM_C_FLAG
 	movne	r1, #0x80
@@ -1302,13 +1319,20 @@ op5E:	@ LSR $nnnn, X
 	biceq	REG_P, REG_P, #ARM_N_FLAG
 .endm
 
+.macro	OP_ROR_A
+	tst	REG_P, #ARM_C_FLAG
+	movne	r1, #0x80
+	moveq	r1, #0
+	orrs	r0, r1, REG_A, lsr #25
+	MRS_P
+	movs	REG_A, r0, lsl #24
+	orrmi	REG_P, REG_P, #ARM_N_FLAG
+	bicpl	REG_P, REG_P, #ARM_N_FLAG
+.endm
+
 op2A:	@ ROL A
 	IMPLIED
-	tst	REG_P, #ARM_C_FLAG
-	movne	r1, #1 << 24
-	moveq	r1, #0
-	orrs	REG_A, r1, REG_A, lsl #1
-	MRS_P
+	OP_ROL_A
 	CYCLE_NEXT	2
 
 op26:	@ ROL $nn
@@ -1334,14 +1358,7 @@ op3E:	@ ROL $nnnn, X
 
 op6A:	@ ROR A
 	IMPLIED
-	tst	REG_P, #ARM_C_FLAG
-	movne	r1, #0x80
-	moveq	r1, #0
-	orrs	r0, r1, REG_A, lsr #25
-	MRS_P
-	movs	REG_A, r0, lsl #24
-	orrmi	REG_P, REG_P, #ARM_N_FLAG
-	bicpl	REG_P, REG_P, #ARM_N_FLAG
+	OP_ROR_A
 	CYCLE_NEXT	2
 
 op66:	@ ROR $nn
@@ -1450,6 +1467,7 @@ pc_bank:	.long	0
 @@@ r0	=> オフセット
 @@@ 
 relative_jump:	
+#if 0
 	ldr	r1, pc_bank
 	@@ 真のPCを得る
 	sub	r1, REG_PC, r1
@@ -1457,6 +1475,9 @@ relative_jump:
 	@@ 符号拡張
 	add	r0, r1, r0, asr #24
 	LOAD_PC
+#endif
+	mov	r0, r0, lsl #24
+	add	REG_PC, REG_PC, r0, asr #24
 	CYCLE_NEXT	3
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1624,11 +1645,11 @@ do_int:
 	LOAD_PC
 	CYCLE_NEXT	7
 
-	.globl	cpu_reset
-
 @@@ 
 @@@ リセットの処理
 @@@ 
+	.globl	cpu_reset
+
 cpu_reset:
 	stmfd	sp!, {lr}
 	mov	REG_P, #ARM_Z_FLAG
@@ -1666,9 +1687,13 @@ read_rom_byte:
 	ldrb	r0, [r0, REG_ADDR]
 	mov	pc, lr
 
+@@@ 
+@@@ 未実装
+@@@ 
 write_rom_byte:	
 	b	write_rom_byte
 
+#if 0
 @@@ 
 @@@ ミラーリングを考慮しなければならない
 @@@ 
@@ -1683,7 +1708,7 @@ write_ram_byte:
 	add	r1, r1, #NES_RAM
 	strb	r0, [r1]
 	mov	pc, lr
-
+#endif
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@	
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@	
@@ -1718,24 +1743,24 @@ cpu_exec:
 
 	adr	REG_OP_TABLE, cpu_exec_table
 
+@@@ 
+@@@	NMIのチェックはここで一度だけ行う
+@@@ 
 	tst	REG_P_REST, #P_REST_NMI_PENDING
 	bne	do_int
-
-	@@ 1命令実行する
-	@@ 割り込みのチェックが必要な場合はここに戻ってくる
+@@@ 
+@@@	 割り込みのチェックが必要な場合はここに戻ってくる
+@@@ 
 cpu_exec_check_int:
 	tst	REG_P_REST, #P_REST_I_FLAG
+	@@ I が立っている場合は割り込みを無視
 	ldrneb	r0, [REG_PC], #1
 	ldrne	pc, [REG_OP_TABLE, r0, lsl #2]
 	@@ 割り込みのチェック
 	tst	REG_P_REST, #P_REST_INT_PENDING
-	bne	do_int
-
-	@@ 割り込みのチェックが必要ないときはここから
-	@@ でも，あまりここには帰ってこない
-cpu_exec_no_int:
-	ldrb	r0, [REG_PC], #1
-	ldr	pc, [REG_OP_TABLE, r0, lsl #2]
+	ldreqb	r0, [REG_PC], #1
+	ldreq	pc, [REG_OP_TABLE, r0, lsl #2]
+	b	do_int
 
 	ALIGN
 @@@ 
@@ -1813,6 +1838,13 @@ init_cpu:
 	mov	pc, lr
 
 	.pool
+
+@@@ 
+@@@ CPU テストコード
+@@@ 
+#ifdef CPU_TEST
+#include "cpu-test.S"
+#endif
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

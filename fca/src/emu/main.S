@@ -36,7 +36,9 @@ emulator_entry:
 @	mov	REG_BASE, #BASE_ADDR
 
 	bl	init_emulator
-@	bl	run_cpu_test
+#ifdef CPU_TEST
+	bl	run_cpu_test
+#endif
 	bl	run_emulator
 
 	@@ restore registers
@@ -144,8 +146,8 @@ emulate_frame:
 	bl	ppu_start_vbl
 	mov	REG_CYCLE, #1
 	bl	cpu_exec
-	@bl	ppu_nmi_enabled
-	@orrne	REG_P_REST, REG_P_REST, #P_REST_NMI_PENDING
+	tst	REG_P_REST, #P_REST_ENB_NMI
+	orrne	REG_P_REST, REG_P_REST, #P_REST_NMI_PENDING
 	mov	REG_CYCLE, #112
 	bl	cpu_exec
 

@@ -251,6 +251,166 @@ write_2007:
 1:	.string "write 2007 %x %x\n"
 	ALIGN
 
+
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ タイルの変換
+@@@ 
+@@@ NESのタイルはVRAMの$0000-$1000と$1000-2000に置かれている
+@@@ これはBGとSPRで共通に使われるので，GBAのBG用タイルとSPR用
+@@@ タイルの両方にコピーしなければならない。
+@@@ 
+@@@ BGのタイルは
+@@@ 0600_0000-0600_2000
+@@@ 0600_4000-0600_6000
+@@@ に置く
+@@@ 
+@@@ SPRのタイルは
+@@@ 0601_0000-0601_2000
+@@@ 0601_4000-0601_6000
+@@@ に置く
+
+
+
+	SECTION_FAST
+	ALIGN
+
+@@@ 
+@@@ 0000-2000を8つにわける
+@@@ ひとつは0x400つまり64個
+@@@ 
+tile_map:
+	.long	0, 0, 0, 0
+	.long	0, 0, 0, 0
+
+.macro	SET_TILE_BANK_LO	n
+	ldr	r1, tile_map + (4 * \n)
+	teq	r1, r11
+	beq	1f
+
+	str	r11, tile_map + (4 * \n)
+	add	r0, r11, #(0x400 * \n)
+	mov	r1, #0x06000000
+	add	r1, r1, #(0x800 * \n)
+	add	r2, r1, #0x10000
+	bl	trans_tile_64
+1:	
+.endm
+
+.macro	SET_TILE_BANK_HI	n
+	ldr	r1, tile_map + (4 * \n)
+	teq	r1, r11
+	beq	1f
+
+	str	r11, tile_map + (4 * \n)
+	add	r0, r11, #(0x400 * \n)
+	mov	r1, #0x06000000
+	add	r1, r1, #(0x800 * \n)
+	add	r2, r1, #0x10000
+	add	r1, r1, #0x2000
+	bl	trans_tile_64
+1:	
+.endm
+
+	.globl	set_vram_bank_0to7
+set_vram_bank_0to7:	
+	stmfd	sp!, {r4-r11, lr}
+	mov	r11, r0
+
+	SET_TILE_BANK_LO	0
+	SET_TILE_BANK_LO	1
+	SET_TILE_BANK_LO	2
+	SET_TILE_BANK_LO	3
+	SET_TILE_BANK_HI	4
+	SET_TILE_BANK_HI	5
+	SET_TILE_BANK_HI	6
+	SET_TILE_BANK_HI	7
+
+	ldmfd	sp!, {r4-r11, pc}
+
+	.globl	translate_tiles
+
+
+@@@ 
+@@@ タイルを64個変換する
+@@@ 
+@@@ r0	=> SRC
+@@@ r1	=> DST1
+@@@ r2	=> DST2
+@@@ 
+@@@ r0	<= SRC + 0x400
+@@@ r1	<= DST1 + 0x800
+@@@ r2	<= DST2 + 0x800
+@@@ r3-r10 を壊す
+@@@ 
+.macro	TRANS_LINE	reg1, reg2, mask, shift
+	and	r8, \reg1, #\mask
+	ldr	r9, [r3, r8, \shift]
+	and	r8, \reg2, #\mask
+	ldr	r8, [r3, r8, \shift]
+	orr	r8, r9, r8, lsl #1
+	str	r8, [r1], #4
+	str	r8, [r2], #4
+.endm
+trans_tile_64:	
+	adr	r3, tile_translate_table
+
+	mov	r10, #64
+1:	
+	@@ タイルをひとつロード
+	ldmia	r0!, {r4-r7}
+
+	TRANS_LINE	r4, r6, 0x000000FF, lsl #2
+	TRANS_LINE	r4, r6, 0x0000FF00, lsr #6
+	TRANS_LINE	r4, r6, 0x00FF0000, lsr #14
+	TRANS_LINE	r4, r6, 0xFF000000, lsr #22
+
+	TRANS_LINE	r5, r7, 0x000000FF, lsl #2
+	TRANS_LINE	r5, r7, 0x0000FF00, lsr #6
+	TRANS_LINE	r5, r7, 0x00FF0000, lsr #14
+	TRANS_LINE	r5, r7, 0xFF000000, lsr #22
+
+	subs	r10, r10, #1
+	bne	1b
+	
+	mov	pc, lr
+
+
+	ALIGN
+tile_translate_table:	
+	.fill	256, 4, 0
+
+	SECTION_SLOW
+	ALIGN
+init_tile_trans_table:	
+	@@ 
+	@@ タイルの変換テーブルを初期化する
+	@@ 
+	ldr	r1, =tile_translate_table
+	mov	r2, #0
+1:	
+	mov	r3, #0
+
+	tst	r2, #0x80;  orrne	r3, r3, #0x00000001
+	tst	r2, #0x40;  orrne	r3, r3, #0x00000010
+	tst	r2, #0x20;  orrne	r3, r3, #0x00000100
+	tst	r2, #0x10;  orrne	r3, r3, #0x00001000
+	tst	r2, #0x08;  orrne	r3, r3, #0x00010000
+	tst	r2, #0x04;  orrne	r3, r3, #0x00100000
+	tst	r2, #0x02;  orrne	r3, r3, #0x01000000
+	tst	r2, #0x01;  orrne	r3, r3, #0x10000000
+
+	str	r3, [r1], #4
+	add	r2, r2, #1
+	teq	r2, #256
+	bne	1b
+
+	mov	pc, lr
+
+
+
 #if 0
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -788,11 +948,9 @@ write_save_ram:
 
 	.globl	init_ppu
 init_ppu:
+	b	init_tile_trans_table
 	mov	pc, lr
 
-	.globl	set_vram_bank_0to7
-set_vram_bank_0to7:	
-	mov	pc, lr
 
 	.globl	ppu_start_frame
 ppu_start_frame:	

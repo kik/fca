@@ -67,7 +67,7 @@ start_shell(void)
   _palette[0xDF] = RGB(0, 31, 0);
   _palette[0xEF] = RGB(0, 0, 31);
 
-  for (i = 0; i < 256; i += 16) {
+  for (i = 0; i < 512; i += 16) {
     _palette[0x0 | i] = RGB(0, 0, 0);
     _palette[0x1 | i] = RGB(0, 0, 15);
     _palette[0x2 | i] = RGB(0, 15, 0);

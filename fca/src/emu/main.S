@@ -298,11 +298,12 @@ emulate_frame:
 	blne	draw_line
 
 	ldr	r0, current_line
+#if 0
 	@@ SMB1はここでHITを立てる
 	@@ HITの実装をしなければ
-	teq	r0, #30
+	teq	r0, #200
 	orreq	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT
-
+#endif
 	add	r0, r0, #1
 	str	r0, current_line
 	cmp	r0, #240

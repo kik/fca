@@ -425,6 +425,24 @@ gba_line_1:
 	.globl	draw_line
 
 draw_line:
+	@@ まずHITをチェックする
+	and	r1, REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR | P_REST_SPR_HIT)
+	teq	r1, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
+	bne	1f
+	ldrb	r1, nes_sprite_0
+	add	r1, r1, #1
+	sub	r2, r0, r1
+	and	r2, r2, #255
+	mov	r1, #8
+	tst	REG_P_REST, #P_REST_SPR_SZ
+	movne	r1, #16
+	cmp	r2, r1
+	@@ r0 = v, r1 = tx, r2 = spr offset
+	ldrcc	r0, loopy_v
+	ldrcc	r1, loopy_tx
+	bcc	check_spr_hit
+check_spr_hit_ret:	
+1:	
 	@@ v:0000010000011111=t:0000010000011111
 	ldr	r0, loopy_v
 	ldr	r1, loopy_tx
@@ -733,21 +751,23 @@ vbl_handler:
 @@@				||+++++++---NES Tile# & 0xFE
 @@@				++---00(# & 1 == 0), 01(# & 1 == 1)
 
+nes_sprite_0:	.long	0
 
 @@@ 
 @@@ スプライトDMA
 @@@ 
 	.globl	spr_dma
 spr_dma:	
-	str	REG_P_REST, spr_old
-	stmfd	sp!, {r4, r5, lr}	
+	stmfd	sp!, {r4, r5, REG_P_REST, lr}
+	ldr	REG_P_REST, spr_old
 	@@ r0 = DMA src
 	sub	REG_CYCLE, REG_CYCLE, #512
 	sub	REG_CYCLE, REG_CYCLE, #2
 	adr	r1, gba_sprite
 	mov	r2, #64
-1:	
 	ldr	r3, [r0], #4
+	str	r3, nes_sprite_0
+1:	
 	@@ Y
 	and	r5, r3, #255
 #if 0
@@ -790,8 +810,9 @@ spr_dma:
 	strh	r4, [r1, #-4]
 
 	subs	r2, r2, #1
+	ldrne	r3, [r0], #4
 	bne	1b
-	ldmfd	sp!, {r4, r5, pc}
+	ldmfd	sp!, {r4, r5, REG_P_REST, pc}
 
 gba_sprite:	
 	.fill	64, 8, 0
@@ -818,6 +839,10 @@ write_2004:
 	ldrb	r1, ppu_reg_2003
 	add	r2, r1, #1
 	strb	r2, ppu_reg_2003
+
+	cmp	r2, #4
+	adr	r3, nes_sprite_0
+	strccb	r0, [r3, r2]
 
 	mov	r2, r1, ror #2
 	adr	r3, gba_sprite
@@ -1053,6 +1078,99 @@ init_gba_spr:
 	strh	r2, [r0, #30]
 #endif
 	mov	pc, lr
+
+@@@ 
+@@@ HITフラグをチェックする
+@@@ 
+@@@ r0 <= loopy_v
+@@@ r1 <= loopy_tx
+@@@ r2 <= スプライトのオフセット
+@@@ 
+check_spr_hit:	
+	stmfd	sp!, {r4, r5}
+	ldr	r3, nes_sprite_0
+
+	mov	r4, #7
+	tst	REG_P_REST, #P_REST_SPR_SZ
+	movne	r4, #15
+	@@ V Flip?
+	tst	r3, #0x800000
+	subne	r2, r4, r2	
+
+	@@ Tile #
+	and	r4, r3, #255 << 8
+	mov	r5, #0
+	tst	REG_P_REST, #P_REST_SPR_ADR
+	movne	r5, #0x100
+	tst	REG_P_REST, #P_REST_SPR_SZ
+	andne	r5, r4, #0x100
+	bicne	r4, r4, #0x100
+	cmp	r2, #8
+	addcs	r4, r4, #1
+	subcs	r2, r2, #8
+	add	r4, r5, r4, lsr #8
+	orr	r4, r2, r4, lsl #4
+	mov	r2, r4, lsr #10
+	adr	r5, tile_map
+	ldr	r2, [r5, r2, lsl #2]
+	ldrb	r4, [r2, r4]!
+	ldrb	r2, [r2, #8]
+	orrs	r2, r2, r4
+	@@ ちょっと手抜き
+	orrne	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT
+	ldmfd	sp!, {r4, r5}
+	b	check_spr_hit_ret
+@@@ 
+@@@ 途中まで書いたが面倒すぎる
+@@@ 
+#if 0
+	ldmfdeq	sp!, {r4, r5}
+	beq	check_spr_hit_ret
+
+	@@ r2がスプライトのビットマップ
+	tst	r3, #0x400000
+	beq	1f
+	@@ H flip
+	mov	r4, #0
+	tst	r2, #0x01;	orrne	r4, r4, #0x80
+	tst	r2, #0x02;	orrne	r4, r4, #0x40
+	tst	r2, #0x04;	orrne	r4, r4, #0x20
+	tst	r2, #0x08;	orrne	r4, r4, #0x10
+	tst	r2, #0x10;	orrne	r4, r4, #0x08
+	tst	r2, #0x20;	orrne	r4, r4, #0x04
+	tst	r2, #0x40;	orrne	r4, r4, #0x02
+	tst	r2, #0x80;	orrne	r4, r4, #0x01
+	mov	r2, r4
+1:	
+	mov	r4,     #0x04100000
+	orr	r4, r4, #0x000FE000
+	and	r1, r1, r4
+	bic	r0, r0, r4, lsr #16
+
+	@@ スプライトのX位置
+	and	r4, r3, #0xFF << 24
+	@@ X方向にスクロール
+	add	r1, r1, r4, lsr #11
+	tst	r1, r1, #0x20 << 16
+	@@ name table Xを反転
+	eorne	r1, r1, #0x0420 << 16
+	orr	r0, r1, r0, lsl #16
+
+	and	r1, r0, #0x0C00 << 16
+	adr	r5, map_table_map
+	ldr	r1, [r5, r1, lsr #24]
+	bic	r5, r0, #0xFC00 << 16
+	ldrb	r1, [r5, r1, lsr #15]
+	and	r5, r0, #0x7000 << 16
+	mov	r1, r1, lsl #4
+	add	r1, r1, r5, lsr #28
+	
+	adr	r4, tile_map
+	and	r5, r1, #0xFC00
+	orr	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT
+	ldmfd	sp!, {r4, r5}
+	b	check_spr_hit_ret
+#endif
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

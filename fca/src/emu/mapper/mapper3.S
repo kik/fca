@@ -15,6 +15,9 @@ reset_mapper3:
 	mov	r0, #0
 	bleq	set_memory_map_CtoE
 
+	mov	r0, #0
+	bl	set_vram_bank_0to7
+
 	ldopt	r0, EMU_OPT_n_chr_rom
 	sub	r0, r0, #1
 	str	r0, m3_n_chr_rom

@@ -1,9 +1,16 @@
 
 #include "nes.h"
+#include "gba-regs.h"
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@ 
-@@@ 
+@@@ エミュレータのエントリポイント
 @@@ 
 
+@@@ 
+@@@ 保存しないといけないレジスタをここに保存する
+@@@ 
 	SECTION_SLOW
 	ALIGN
 reg_save:
@@ -11,60 +18,46 @@ reg_save:
 	.long 0, 0, 0, 0	@ r8-r11
 	.long 0, 0, 0		@ r12-r14
 
-rom_base_addr:	
-	.long	0
-
-
 	ALIGN
 
 @@@ 
-@@@ emulator entry point
-@@@ 
-@@@ r0	=> address of rom image
+@@@ エントリポイント
 @@@ 
 	.globl	emulator_entry
-emulator_entry:	
-	ldr	ip, =rom_base_addr
-	str	r0, [ip]
 
-	@@ save registers
+emulator_entry:	
+	@@ レジスタを保存
 	ldr	ip, =reg_save
 	stmia	ip, {r4-r14}
-
-	@@ initialize registers
-
-@	mov	REG_BASE, #BASE_ADDR
 
 #ifdef CPU_TEST
 	bl	run_cpu_test
 #endif
 	bl	init_emulator
+	bl	init_interrupt
 	bl	run_emulator
 
-	@@ restore registers
-
+	@@ レジスタを復元
 	ldr	ip, =reg_save
-	ldmia	ip, {r4-r14}
-
-	mov	pc, lr
+	ldmia	ip, {r4-r13, pc}
 
 	.pool
 
 @@@ 
-@@@ init_emulator
+@@@ エミュレータの初期化
 @@@ 
-@@@ r0	=> address of rom image
 @@@ 
 init_emulator:	
-	stmfd	sp!, {r0, lr}
+	stmfd	sp!, {lr}
 	bl	init_cpu
 	bl	init_ppu
 	bl	init_apu
-	ldmfd	sp!, {r0, lr}
-	b	init_mapper
+	bl	init_mapper
+	ldmfd	sp!, {pc}
 
 @@@ 
-@@@ for debug
+@@@ デバッグ用のprintf
+@@@ かなり遅いので注意して使う
 @@@ 
 	.globl	emu_printf
 
@@ -76,43 +69,124 @@ emu_printf:
 
 	.pool
 
+#if 0
+@@@ 
+@@@ デバッグ用のパニック
+@@@ 
+@@@ r0 => パニックナンバー
+@@@ 
+	.globl	emu_panic_data
+
+emu_panic_data:
+	.long	0, 0, 0, 0	@ r0-r3
+	.long	0, 0, 0, 0	@ r4-r7
+	.long	0, 0, 0, 0	@ r8-r11
+	.long	0		@ r12
+	.long	0		@ pc_bank
+
+	.globl	emu_panic
+
+emu_panic:	
+	str	r0, emu_panic_data
+	adr	r0, emu_panic_data + 4
+	stmia	r0!, {r2-r12}
+	ldr	r1, =pc_bank
+	ldr	r1, [r1]
+	str	r1, [r0], #4
+	adr	r0, emu_panic_data
+	b	panic
+#endif
+
+@@@ 
+@@@ 割り込みの設定
+@@@ 
+
+init_interrupt:	
+	mov	r1, #GBA_REG_BASE
+
+	@@ ハンドラを登録
+	ldr	r0, =int_handler
+	str	r0, [r1, #-4]
+
+	@mov	r1, #0x8
+	@strh	r1, [r0, #4]
+
+	mov	r0, #(GBA_IRQ_VBL)
+	orr	r0, r0, r0, lsl #16
+	@@ IFをクリアして
+	@@ IEを設定する
+	str	r0, [r1, #GBA_IE]
+
+	@@ 割り込みを有効にする
+	mov	r0, #1
+	str	r0, [r1, #GBA_IME]
+	
+	mov	pc, lr
+
+	.pool
+
 
 	SECTION_FAST
 	ALIGN
+
+@@@ 
+@@@ RAMの先頭にこれを置いておく
+@@@ エミュレータでデバッグするときにブレークポイントをしかけやすいので
+@@@ 
 	.globl	emu_break
+
 emu_break:
-	nop
-	nop
 	nop
 	nop
 	mov	pc, lr
 
-	ALIGN
+
+@@@ 
+@@@ 割り込みハンドラ
+@@@ 
+
 int_handler:
 	stmfd	sp!, {lr}
-	mov	r0, #0x04000000
-	add	r0, r0, #0x200
+	mov	r0, #GBA_REG_BASE
 
-	ldrh	r1, [r0, #2]
-	strh	r1, [r0, #2]
+	ldr	r1, [r0, #GBA_IE]
+	str	r1, [r0, #GBA_IE]
 
 	mov	r2, #1
-	strh	r2, [r0]
+	str	r2, [r0, #GBA_IME]
 
-	tst	r1, #1
+	tst	r1, #GBA_IRQ_VBL
 	blne	vbl_handler
 
 	ldmfd	sp!, {pc}
 
 
-current_line:	.long	0
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ エミュレータのメインループ
+@@@ 
+
+@@@ 
+@@@ 多くのマッパーがHSYNCをトラップする
+@@@ 
 hsync_handler:	.long	0
 
+@@@ 
+@@@ Hsyncハンドラの登録
+@@@ 
+@@@ Hsyncハンドラは現在のライン番号を引数にして呼ばれる
+@@@ 
 	.globl	install_hsync_handler
+
 install_hsync_handler:	
 	str	r0, hsync_handler
 	mov	pc, lr
 
+
+@@@ 
+@@@ r0にライン番号をロードしておくこと
+@@@ 
 .macro	HSYNC
 	ldr	r1, hsync_handler
 	teq	r1, #0
@@ -121,40 +195,44 @@ install_hsync_handler:
 9999:	
 .endm
 
+
+@@@ 
+@@@ 現在のライン番号[0..262]
+@@@ 
+
+current_line:	.long	0
+
+
+@@@ 
+@@@ メインループ
+@@@ 
 run_emulator:	
 	stmfd	sp!, {lr}
-#if 1
-	mov	r0, #0x04000000
-	adr	r1, int_handler
-	str	r1, [r0, #-4]
-	mov	r1, #0x8
-	strh	r1, [r0, #4]
-	mov	r1, #1
-	add	r0, r0, #0x200
-	strh	r1, [r0]
-	strh	r1, [r0, #2]
-	strh	r1, [r0, #8]
-#endif
 	bl	cpu_reset
 emulate_frame:	
 	@@ 
 	@@ R を押している間テキストを表示する
 	@@ Lを押しながらRを押すとパニック(デバッグ用)
 	@@ 
-	mov	r0, #0x04000000
-	ldr	r1, [r0, #0x130]
-	tst	r1, #0x100
+	mov	r0, #GBA_REG_BASE
+	ldr	r1, [r0, #GBA_KEY]
+	tst	r1, #GBA_KEY_R
 	bne	1f
+	@@ Rが押されている
 	tst	r1, #0x200
 	moveq	r0, #0x01000000
+	@@ Lも押されていればパニック
 	beq	emu_panic
-	mov	r2, #0x0840
-	ldr	r3, = 0x1C08
+
+	mov	r2, #GBA_DISP_CR_ENB_BG3
+	ldr	r3, = GBA_BG_CR_MAP_ADDR(0x1C) | GBA_BG_CR_TILE_ADDR(2)
 2:	
-	strh	r2, [r0]
-	strh	r3, [r0, #0xE]
-	ldr	r1, [r0, #0x130]
-	tst	r1, #0x100
+	strh	r2, [r0, #GBA_DISP_CR]
+	strh	r3, [r0, #GBA_BGn_CR(3)]
+
+	@@ Rが押されてる間ループ
+	ldr	r1, [r0, #GBA_KEY]
+	tst	r1, #GBA_KEY_R
 	beq	2b
 1:	
 

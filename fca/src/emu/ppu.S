@@ -1,5 +1,5 @@
 #include "nes.h"
-
+#include "gba-regs.h"
 
 	SECTION_FAST
 	ALIGN
@@ -265,41 +265,36 @@ write_2007:
 	.globl	ppu_start_frame
 ppu_start_frame:
 	stmfd	sp!, {lr}
-	mov	r1, #0x04000000
-	mov	r0, #0
+	mov	r1, #GBA_REG_BASE
 
-	@@ BGを描く場合は BG_0 を有効に
+	mov	r0, #0
 	tst	REG_P_REST, #P_REST_DRAW_BG
-	orrne	r0, r0, #0x0100
+	@@ BGを描く場合は BG_0 を有効に
+	orrne	r0, r0, #(GBA_DISP_CR_ENB_BG0 | GBA_DISP_CR_ENB_BG1)
 	tst	REG_P_REST, #P_REST_DRAW_SPR
-	orrne	r0, r0, #0x1000
+	orrne	r0, r0, #GBA_DISP_CR_ENB_SPR
 
 	tst	REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
 	@@ BGもSPRも描かない場合は画面をブランクにする
 	@@ 白くなってしまうのでなんとかしないと
-	orreq	r0, r0, #0x80
-	strh	r0, [r1]
+	orreq	r0, r0, #GBA_DISP_CR_BLANK
+
+	strh	r0, [r1, #GBA_DISP_CR]
 	@@ BGもSPRも描かないならここでおわり
 	moveq	pc, lr
 
-	@@ BG_0 を設定する
-	@@ 
-	@@ タイルは0600_0000と0600_4000から選択する
-	@@ 
-	@@ マップは0600_2000に固定
-	@@ 
-	adr	r1, bg_cr_value
-	mov	r0, #0x4400
-	tst	REG_P_REST, #P_REST_BG_ADR
-	orrne	r0, r0, #0x0004	@ タイルを変更
-	strh	r0, [r1]
+	ldr	r0, =0x08080241
+	str	r0, [r1, #0x50]
 
 	ldr	r1, loopy_tx
 	mov	r1, r1, lsr #16
 	str	r1, loopy_v
 
-	ldr	r1, =skip_table
-	str	r1, nes_line
+	@ldr	r1, =skip_table
+	@str	r1, nes_line
+	mov	r1, #256 - 9
+	strb	r1, gba_line_0
+	strb	r1, gba_line_1
 
 	bl	validate_tile
 	bl	validate_spr
@@ -308,8 +303,14 @@ ppu_start_frame:
 
 	.pool
 
+#if 0
 nes_line:
 	.long	0
+#endif
+gba_line_0:
+	.byte	0
+gba_line_1:
+	.byte	0
 
 	ALIGN
 
@@ -369,42 +370,31 @@ nes_line:
 @@@ Yにこの値を使うと一番上のラインにこのラインが表示されるので
 @@@ GBAのライン番号を引かなければならない
 @@@ 
+
+@@@ 
+@@@ Y方向に画像を3/4に縮小しなければいけない
+@@@ BG0・BG1にすこしずらして描いて
+@@@ 合成することでRPGなどで字がつぶれるのを防ぐ
+@@@ 
+@@@ BG0  012345 012345
+@@@ BG1  672345 672345
+@@@ 
+
+@@@ 
+@@@ r0	=> 現在のライン番号
+@@@ 
 	.globl	draw_line
 
 draw_line:
-	ldr	r0, nes_line
-	ldrb	r3, [r0], #1
-	ldrb	r2, [r0]
-	teq	r3, r2
-	moveq	r3, #160
-	str	r0, nes_line
-	@@ r3 は GBA のライン番号(0-159)
-	@@ 160以上 の場合はこのラインはスキップする
-
-	@@ BG_0 を設定する
-	@@ 
-	@@ タイルは0600_0000と0600_4000から選択する
-	@@ 
-	@@ マップは0600_2000に固定
-	@@ 
-	adr	r1, bg_cr_value
-	add	r1, r1, r3, lsl #1
-	mov	r0, #0x4400
-	tst	REG_P_REST, #P_REST_BG_ADR
-	orrne	r0, r0, #0x0004	@ タイルを変更
-	cmp	r3, #160
-	strcch	r0, [r1]
-
 	@@ v:0000010000011111=t:0000010000011111
-	@@ vを更新してXのスクロール値を得る
 	ldr	r0, loopy_v
 	ldr	r1, loopy_tx
 
 	mov	r2,     #0x04100000
 	orr	r2, r2, #0x000FE000
 
-	@@ loopy_v & ~r2
-	@@ loopy_t &  r2
+	@@ r0 = loopy_v  & ~r2
+	@@ r1 = loopy_tx &  r2
 	bic	r0, r0, r2, lsr #16
 	and	r1, r1, r2
 
@@ -412,37 +402,139 @@ draw_line:
 	orr	r2, r0, r0, lsr #10
 	orr	r2, r2, r2, lsl #9
 	mov	r2, r2, lsl #14
-	sub	r2, r2, r3, lsl #16
 
-	orr	r0, r0, r1, lsr #16
 	@@ Xのスクロール値をr2におく
 	orr	r2, r2, r1, lsr #13
-	and	r1, r1, #0x04000000
-	orr	r2, r2, r1, lsr #18
+	and	r3, r1, #0x04000000
+	orr	r2, r2, r3, lsr #18
+	@add	r2, r2, #0x8
 
-	cmp	r3, #160
-	adr	r1, scroll_value
-	strcc	r2, [r1, r3, lsl #2]
+	@@ loopy_v を更新
+	orr	r0, r0, r1, lsr #16
 
-	@@ loopy_v を次のラインにして保存する
+	@@ Yのオフセットで分岐
+	and	r1, r0, #0x7000
+	ldr	pc, [pc, r1, lsr #10]
+	nop
+	.long	0f, 1f, 2f, 3f
+	.long	4f, 5f, 6f, 7f
+0:
+1:	
+	@@ 0,1はBG0にだけ描く
 	add	r0, r0, #0x1000
-	bic	r0, r0, #0x8000
-	tst	r0, #0x7000
-	@@ Y オフセットが 7→0のとき0
-	bne	1f
+	str	r0, loopy_v
+
+	ldrb	r0, gba_line_0
+	add	r1, r0, #1
+	strb	r1, gba_line_0
+	cmp	r0, #160
+	movcs	pc, lr
+
+	adr	r1, scroll_value
+	sub	r2, r2, r0, lsl #16
+	str	r2, [r1, r0, lsl #3]
+
+	adr	r1, bg_cr_value
+	mov	r2, #(GBA_BG_CR_SIZE_512x256 | GBA_BG_CR_MAP_ADDR(0x4))
+	tst	REG_P_REST, #P_REST_BG_ADR
+	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
+	add	r1, r1, r0, lsl #2
+	strh	r2, [r1]
+
+	mov	pc, lr
+
+2:	
+3:	
+4:	
+5:	
+	@@ 2..5は両方に描く
+	add	r0, r0, #0x1000
+	str	r0, loopy_v
+
+	ldrb	r0, gba_line_0
+	add	r1, r0, #1
+	strb	r1, gba_line_0
+	@@ 同じ値にする
+	strb	r1, gba_line_1
+	cmp	r0, #160
+	movcs	pc, lr
+
+	adr	r1, scroll_value
+	sub	r2, r2, r0, lsl #16
+	str	r2, [r1, r0, lsl #3]!
+	str	r2, [r1, #4]
+
+	adr	r1, bg_cr_value
+	mov	r2, #(GBA_BG_CR_SIZE_512x256 | GBA_BG_CR_MAP_ADDR(0x4))
+	tst	REG_P_REST, #P_REST_BG_ADR
+	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
+	orr	r2, r2, r2, lsl #16
+	str	r2, [r1, r0, lsl #2]
+
+	mov	pc, lr
+
+6:	
+	@@ 6はBG1にだけ描く
+	add	r0, r0, #0x1000
+	str	r0, loopy_v
+
+	ldrb	r0, gba_line_1
+	add	r1, r0, #1
+	strb	r1, gba_line_1
+	cmp	r0, #160
+	movcs	pc, lr
+
+	adr	r1, scroll_value + 4
+	sub	r2, r2, r0, lsl #16
+	str	r2, [r1, r0, lsl #3]
+
+	adr	r1, bg_cr_value + 2
+	mov	r2, #(GBA_BG_CR_SIZE_512x256 | GBA_BG_CR_MAP_ADDR(0x4))
+	tst	REG_P_REST, #P_REST_BG_ADR
+	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
+	add	r1, r1, r0, lsl #2
+	strh	r2, [r1]
+	mov	pc, lr
+
+7:	
+	bic	r0, r0, #0xF000
 	@@ Y をふやして
 	add	r1, r0, #0x0020
-	ands	r2, r1, #0x3E0
+	ands	r3, r1, #0x3E0
 	@@ これが0になるのは元のYが31だった場合
 	eoreq	r0, r0, #0x0800
-	teqne	r2, #0x3C0
+	teqne	r3, #0x3C0
 	@@ Yが29だった場合もZを立てる
 	eoreq	r0, r0, #0x0800
 	biceq	r0, r0, #0x3E0
+	streq	r0, loopy_v
 	@@ Yが29でも31でもなかった場合
-	movne	r0, r1
-1:	str	r0, loopy_v
+	strne	r1, loopy_v
+
+	ldrb	r0, gba_line_1
+	add	r1, r0, #1
+	strb	r1, gba_line_1
+	cmp	r0, #160
+	movcs	pc, lr
+
+	adr	r1, scroll_value + 4
+	sub	r2, r2, r0, lsl #16
+	str	r2, [r1, r0, lsl #3]
+
+	adr	r1, bg_cr_value + 2
+	mov	r2, #(GBA_BG_CR_SIZE_512x256 | GBA_BG_CR_MAP_ADDR(0x4))
+	tst	REG_P_REST, #P_REST_BG_ADR
+	orrne	r2, r2, #GBA_BG_CR_TILE_ADDR(1)
+	add	r1, r1, r0, lsl #2
+	strh	r2, [r1]
 	mov	pc, lr
+
+@@@ 
+@@@ ラインごとのBG_CR0・BG_CR1の設定
+@@@ 
+
+bg_cr_value:	
+	.fill	160, 4, 0
 
 @@@ 
 @@@ ラインごとのX，Yのスクロールの値
@@ -450,14 +542,7 @@ draw_line:
 @@@ 
 
 scroll_value:	
-	.fill	160, 4, 0
-
-@@@ 
-@@@ ラインごとのBG_CRの設定
-@@@ 
-
-bg_cr_value:	
-	.fill	160, 2, 0
+	.fill	160, 8, 0
 
 	ALIGN
 
@@ -469,91 +554,65 @@ bg_cr_value:
 @@@ 
 	.globl	vbl_handler
 vbl_handler:	
-	mov	r0, #0x04000000
+	mov	r0, #GBA_REG_BASE
 	
-	ldr	r1, bg_cr_value
-	strh	r1, [r0, #8]
-
-	adr	r2, scroll_value
-
-	@@ ライン0のスクロール値を設定
-	ldr	r1, [r2], #4
-	str	r1, [r0, #0x10]
-#if 1
+	@@ スプライトの転送
 	@@ DMA stop
 	mov	r1, #0
-	strh	r1, [r0, #0xBA]
-
-	@@ DMA SRC ← &scroll_value[1]
-	str	r2, [r0, #0xB0]
-
-	@@ DMA DST ← BG0_XY
-	add	r1, r0, #0x10	
-	str	r1, [r0, #0xB4]
-
-	@@ DMA Count ← 1
-	mov	r1, #1
-	strh	r1, [r0, #0xB8]
-
-	@@ DMA Ctrl
-	@@ DST:	fixed
-	@@ SRC:	inc
-	mov	r1, #0x60 @| 0x180
-	@@ Width: word
-	@@ Repeat
-	@@ HBlank
-	orr	r1, r1, #0x8000 | 0x2000 | 0x0400 | 0x0200
-	strh	r1, [r0, #0xBA]	
-#endif
-	@@ 次にスプライトをDMAで転送する
-	@@ DMA stop
-	mov	r1, #0
-	strh	r1, [r0, #0xC6]
-
-	@@ DMA SRC ← sprite data
+	strh	r1, [r0, #GBA_DMAn_CR(0)]
 	adr	r1, gba_sprite
-	str	r1, [r0, #0xBC]
-
+	str	r1, [r0, #GBA_DMAn_SRC(0)]
 	@@ DMA DST ← sprite ram
 	mov	r1, #0x07000000
-	str	r1, [r0, #0xC0]
-
-	@@ DMA Count ← 1
+	str	r1, [r0, #GBA_DMAn_DST(0)]
+	@@ DMA Count ← 64 * 4 * 2 byte
 	mov	r1, #64 * 2
-	strh	r1, [r0, #0xC4]
+	strh	r1, [r0, #GBA_DMAn_SIZE(0)]
+	mov	r1, #(GBA_DMA_DST_INCW|GBA_DMA_SRC_INCW|GBA_DMA_WORD|GBA_DMA_IMM|GBA_DMA_ENB)
+	strh	r1, [r0, #GBA_DMAn_CR(0)]
 
-	@@ DMA Ctrl
-	@@ DST:	inc
-	@@ SRC:	inc
-	@@ Width: word
-	mov	r1, #0x8400
-	strh	r1, [r0, #0xC6]	
+	@@ スクロールレジスタの転送
 
+	ldr	r2, =scroll_value
+	add	r3, r0, #GBA_BGn_X(0)
+	ldmia	r2!, {r0, r1}
+	stmia	r3,  {r0, r1}
+
+	mov	r0, #GBA_REG_BASE
 	@@ DMA stop
 	mov	r1, #0
-	strh	r1, [r0, #0xD2]
+	strh	r1, [r0, #GBA_DMAn_CR(0)]
+	@@ DMA SRC ← &scroll_value[1]
+	str	r2, [r0, #GBA_DMAn_SRC(0)]
+	@@ DMA DST ← BG0_XY, BG1_XY
+	str	r3, [r0, #GBA_DMAn_DST(0)]
+	@@ DMA Count ← 2
+	mov	r1, #2
+	strh	r1, [r0, #GBA_DMAn_SIZE(0)]
+	mov	r1, #(GBA_DMA_DST_INC | GBA_DMA_SRC_INCW)
+	orr	r1, r1, #(GBA_DMA_WORD | GBA_DMA_REP | GBA_DMA_HBL | GBA_DMA_ENB)	
+	strh	r1, [r0, #GBA_DMAn_CR(0)]	
 
+	@@ BG_CRを転送する
+	ldr	r1, =bg_cr_value
+	ldr	r2, [r1], #4
+	str	r2, [r0, #GBA_BGn_CR(0)]
+
+	@@ DMA stop
+	mov	r3, #0
+	strh	r3, [r0, #GBA_DMAn_CR(1)]
 	@@ DMA SRC ← &bg_cr_value[1]
-	ldr	r2, =bg_cr_value + 2
-	str	r2, [r0, #0xC8]
-
+	str	r1, [r0, #GBA_DMAn_SRC(1)]
 	@@ DMA DST ← BG0_CR
-	add	r1, r0, #0x8	
-	str	r1, [r0, #0xCC]
-
+	add	r1, r0, #GBA_BGn_CR(0)
+	str	r1, [r0, #GBA_DMAn_DST(1)]
 	@@ DMA Count ← 1
 	mov	r1, #1
-	strh	r1, [r0, #0xD0]
+	strh	r1, [r0, #GBA_DMAn_SIZE(1)]
 
-	@@ DMA Ctrl
-	@@ DST:	fixed
-	@@ SRC:	inc
-	mov	r1, #0x60 @| 0x180
-	@@ Width: hword
-	@@ Repeat
-	@@ HBlank
-	orr	r1, r1, #0x8000 | 0x2000 | 0x0200
-	strh	r1, [r0, #0xD2]	
+	mov	r1, #(GBA_DMA_DST_FIXED | GBA_DMA_SRC_INCW)
+	orr	r1, r1, #(GBA_DMA_WORD | GBA_DMA_REP | GBA_DMA_HBL | GBA_DMA_ENB)
+	strh	r1, [r0, #GBA_DMAn_CR(1)]	
 
 	mov	pc, lr
 

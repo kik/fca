@@ -37,7 +37,7 @@
 
 @@@ freq
 @@@ GBA
-@@@  4194304/(16*(2048-x)) 
+@@@  4194304/(32*(2048-x)) 
 @@@ NES
 @@@  1789772/16/(N+1)
 @@@ 
@@ -45,6 +45,10 @@
 @@@ ぐらいでいいかな(てきとー
 @@@ 0x00.95
 
+
+	.globl	timer0_handler
+timer0_handler:	
+	mov	pc, lr
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -72,13 +76,17 @@ write_4003:
 
 	mov	r1, #0x04000000
 	mov	r0, #0xF000
+	ldrb	r2, ch1_regs
+	and	r2, r2, #0x0C
+	orr	r0, r0, r2
 	str	r0, [r1, #0x68]
 
 	ldrh	r0, ch1_regs + 2
+	bic	r0, r0, #0xF800
 	mov	r0, r0, lsl #1
-	ldr	r1, =freq_table
-	ldrh	r0, [r1, r0]
-	orr	r0, r0, #0x8000
+	ldr	r2, =freq_table
+	ldrh	r0, [r2, r0]
+	orr	r0, r0, #0xC000
 	str	r0, [r1, #0x6C]
 	mov	pc, lr
 
@@ -110,13 +118,17 @@ write_4007:
 
 	mov	r1, #0x04000000
 	mov	r0, #0xF0000000
+	ldrb	r2, ch2_regs
+	and	r2, r2, #0x0C
+	orr	r0, r0, r2, lsl #8
 	str	r0, [r1, #0x60]
 
 	ldrh	r0, ch2_regs + 2
+	bic	r0, r0, #0xF800
 	mov	r0, r0, lsl #1
-	ldr	r1, =freq_table
-	ldrh	r0, [r1, r0]
-	orr	r0, r0, #0x8000
+	ldr	r2, =freq_table
+	ldrh	r0, [r2, r0]
+	orr	r0, r0, #0xC000
 	str	r0, [r1, #0x64]
 	mov	pc, lr
 
@@ -240,6 +252,13 @@ triangle:
 	.globl	init_apu
 init_apu:	
 	mov	r1, #0x04000000
+
+	@@ timer0 240/Hz
+	mvn	r0, #67
+	str	r0, [r1, #0x100]
+	mov	r0, #0xC3
+	strb	r0, [r1, #0x102]
+
 	mov	r0, #0x80
 	strh	r0, [r1, #0x84]
 
@@ -260,9 +279,10 @@ init_apu:
 
 	ldr	r1, =freq_table
 	mov	r2, #0x1000
+	ldr	r3, =0x012B
+	@mov	r0, #0x0095
 1:	
-	mov	r0, #0x0095
-	mul	r0, r2, r0
+	mul	r0, r2, r3
 	mov	r0, r0, lsr #9
 	rsb	r0, r0, #0x800
 	subs	r2, r2, #2

@@ -3,52 +3,6 @@
 #include "text.h"
 #include "load.h"
 
-#define SGCNT0L		*(unsigned short*)0x04000080	// Final sound control register addresses
-#define SGCNT0H		*(unsigned short*)0x04000082
-#define SGCNT1		*(unsigned short*)0x04000084
-
-#define SG30L	*(unsigned short*)0x04000070	// Addresses to sound 3 registers
-#define SG30H	*(unsigned short*)0x04000072
-#define SG31	*(unsigned short*)0x04000074
-
-#define SGWRAM	((unsigned short*)0x04000090)	// Address of sound 3 wave RAM (16 bytes 4bit/step)
-
-static void test()
-{
-  SGCNT0L = 0xFFFF;
-  //SGCNT0H = 0xFFFF;
-  SGCNT1 = 0x08;
-
-  SG30L = 0x0040;
-  SGWRAM[0] = 0x0000;
-  SGWRAM[1] = 0x0000;
-  SGWRAM[2] = 0x0000;
-  SGWRAM[3] = 0x0000;
-  SGWRAM[4] = 0xFFFF;
-  SGWRAM[5] = 0xFFFF;
-  SGWRAM[6] = 0xFFFF;
-  SGWRAM[7] = 0xFFFF;
-  SG30L = 0x0000;
-  SG30H = 0x2000;
-  SG31 = 0x5AC;
-  SG30L |= 0x0080;
-  SG31 |= 0x8000;
-
-  printf("sound test\n");
-
-  while (1) {
-    int *key = (int *)0x04000130;
-    while (*key & 1)
-      ;
-    while (!(*key & 1))
-      ;
-    printf("sound test\n");
-    _ioreg[0x30] = 0;
-    _ioreg[0x31] = 0xF000;
-    _ioreg[0x32] = 0xC5AC;
-  }
-}
-
 int
 start_shell(void)
 {
@@ -87,6 +41,7 @@ start_shell(void)
   printf("emulation end\n");
   while (1);
 }
+
 
 void
 panic(int op, int pc, unsigned char *sp, void *p)

@@ -1554,6 +1554,7 @@ trace_jump:
 	
 
 @@@ pc が指しているバンクの先頭アドレス
+	.globl	pc_bank
 pc_bank:	.long	0
 
 @@@ 

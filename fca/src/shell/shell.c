@@ -15,7 +15,7 @@ start_shell(void)
   _ioreg[0] = 0x0140;
   _ioreg[5] = 0x0704;
   _ioreg[0x102] = 0x4004;
-  _ioreg[0x102] = 0x4000;
+  //  _ioreg[0x102] = 0x4000;
   for (i = 0; i < 32 * 32; i++)
     _vram[0x2000 + i] = i;
 

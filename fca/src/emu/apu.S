@@ -173,6 +173,50 @@ update_square:
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ 三角波
+@@@ 
+#define TR_REG		0x00
+#define TR_ENB		0x04
+#define TR_LEN		0x08
+#define TR_FREQ		0x0C
+#define TR_REG_SZ	0x10
+
+#define TR_REG_HOLD_NOTE	0x80
+
+update_triangle:	
+#if 0
+	ldr	r2, =1942
+	mov	pc, lr
+#endif
+	mov	r1, #0
+	mov	r2, #0
+
+#if 0
+	ldr	r3, [r0, #TR_ENB]
+	teq	r3, #0
+	moveq	pc, lr
+
+	ldr	r4, [r0, #TR_LEN]
+	teq	r4, #0
+	moveq	pc, lr
+
+	ldr	r3, [r0, #TR_REG]
+	@@ lengthカウンタが有効か？
+	tst	r3, #TR_REG_HOLD_NOTE
+	@@ lengthカウンタを更新
+	subeq	r4, r4, #1
+	streq	r4, [r0, #TR_LEN]
+#endif
+	ldr	r5, [r0, #TR_FREQ]
+	ldr	r4, = freq_table
+	mov	r5, r5, lsl #1
+	ldrh	r2, [r4, r5]
+
+	mov	pc, lr
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@
 @@@ タイマのハンドラ
 @@@ 
@@ -215,6 +259,16 @@ do_ch2:
 	str	r2, [r0, #GBA_SG21]
 #endif
 do_ch3:	
+	adr	r0, ch3_reg
+	bl	update_triangle
+	mov	r0, #GBA_REG_BASE
+	mov	r1, #0x80
+	orr	r1, r1, #0x20000000
+	str	r1, [r0, #GBA_SG30]
+	ldr	r1, [r0, #GBA_SGCNT1]
+	tst	r1, #4
+	orreq	r2, r2, #0x8000
+	str	r2, [r0, #GBA_SG31]
 #endif
 	ldmfd	sp!, {r4, r5, pc}
 
@@ -306,7 +360,7 @@ dmc_clocks:
 	.globl	ch5_reg
 ch1_reg:	.fill	SQ_REG_SZ, 1, 0
 ch2_reg:	.fill	SQ_REG_SZ, 1, 0
-
+ch3_reg:	.fill	TR_REG_SZ, 1, 0
 ch5_reg:	.fill	DMC_REG_SZ, 1, 0
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -433,22 +487,38 @@ write_4007:
 
 	.globl	write_4008
 write_4008:	
-	strb	r0, ch3_regs
+	strb	r0, ch3_reg + TR_REG + 0
 	mov	pc, lr
 
 	.globl	write_4009
 write_4009:	
-	strb	r0, ch3_regs + 1
+	strb	r0, ch3_reg + TR_REG + 1
 	mov	pc, lr
 
 	.globl	write_400A
 write_400A:	
-	strb	r0, ch3_regs + 2
+	strb	r0, ch3_reg + TR_REG + 2
+	ldr	r1, ch3_reg + TR_FREQ
+	and	r1, r1, #0x700
+	orr	r1, r1, r0
+	str	r1, ch3_reg + TR_FREQ
 	mov	pc, lr
 
 	.globl	write_400B
 write_400B:	
-	strb	r0, ch3_regs + 3
+	strb	r0, ch3_reg + TR_REG + 3
+	ldrb	r1, ch3_reg + TR_FREQ
+	and	r2, r0, #7
+	orr	r1, r1, r2, lsl #8
+	str	r1, ch3_reg + TR_FREQ
+	
+	adr	r2, length_table
+	ldrb	r0, [r2, r0, lsr #3]
+	mov	r0, r0, lsl #2
+	str	r0, ch3_reg + TR_LEN
+
+	mov	pc, lr
+
 #if 0
 	mov	r1, #0x04000000
 
@@ -599,10 +669,8 @@ read_4015:
 	.pool
 
 triangle:	
-	.long	0x67452301
-	.long	0xEFCDAB89
-	.long	0x98BACDFE
-	.long	0x10325476
+	.byte	0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF
+	.byte	0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10
 
 	.globl	init_apu
 init_apu:	
@@ -632,13 +700,13 @@ init_apu:
 	mov	r0, #0x40
 	strh	r0, [r1, #0x70]
 
-	ldr	r0, =0x67452301
+	ldr	r0, triangle
 	str	r0, [r1, #0x90]
-	ldr	r0, =0xEFCDAB89
+	ldr	r0, triangle + 4
 	str	r0, [r1, #0x94]
-	ldr	r0, =0x98BADCFE
+	ldr	r0, triangle + 8
 	str	r0, [r1, #0x98]
-	ldr	r0, =0x10325476
+	ldr	r0, triangle + 12
 	str	r0, [r1, #0x9C]
 
 #if 0

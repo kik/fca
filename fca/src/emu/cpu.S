@@ -1637,7 +1637,10 @@ jmp_indirect_bug:
 op4C:	
 	ABS_ADDR
 	mov	r0, REG_ADDR
+	mov	r3, REG_PC
 	LOAD_PC
+	teq	r3, REG_PC
+	moveq	REG_CYCLE, #0	
 	CYCLE_NEXT	3
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

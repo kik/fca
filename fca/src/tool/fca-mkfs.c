@@ -7,13 +7,13 @@
  * 使用上の注意
  * ***リトルエンディアン***でないと動かない。
  *
- * カレントディレクトリに配布したファイルを置いて使うこと。
  */
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <getopt.h>
 
 #define FILE_MAGIC     0x04174170
 #define FILE_END_MAGIC 0x41700417
@@ -90,59 +90,43 @@ end(FILE *out)
   fwrite(&file, sizeof file, 1, out);
 }
 
-char *bindir(char *file)
+void
+usage()
 {
-  static char buf[PATH_MAX];
-  char *path;
-
-  path = getenv("FCABINDIR");
-  if (!path) path = ".";
-
-  sprintf(buf, "%s/%s", path, file);
-
-  return buf;
+  printf("usage: fca-mkfs [-c] [-b base-file] out-file file1 file2 ...\n");
+  exit(1);
 }
-
-char *system_files[] = {
-  "emu.bin",     "emu",     "bin",
-  "emuslow.bin", "emuslow", "bin",
-  "font.dat",    "font",    "dat",
-  "mapper0.bin", "mapper0", "bin",
-  "mapper1.bin", "mapper1", "bin",
-  "mapper2.bin", "mapper2", "bin",
-  "mapper3.bin", "mapper3", "bin",
-  "mapper4.bin", "mapper4", "bin",
-  "mapper9.bin", "mapper9", "bin",
-  "mapper10.bin", "mapper10", "bin",
-  "mapper21.bin", "mapper21", "bin",
-  "mapper66.bin", "mapper66", "bin",
-  0
-};
 
 int
 main(int argc, char **argv)
 {
   FILE *out;
-  int i;
+  int c;
+  char *base_file = "shell.bin";
+  int  dont_close = 0;
 
-  if (argc < 3) {
-    printf("usage: fca-mkfs out-file file1 file2  ...\n");
-    exit(1);
+  while ((c = getopt(argc, argv, "cb:")) >= 0) {
+    switch (c) {
+    case 'c': dont_close = 1; break;
+    case 'b': base_file = optarg; break;
+    default:
+      usage();
+    }
   }
 
-  out = fopen(argv[1], "wb");
+  if (optind >= argc)
+    usage();
+
+  out = fopen(argv[optind], "wb");
   if (!out) {
-    perror(argv[1]);
+    perror(argv[optind]);
     exit(1);
   }
   
-  copy_file(out, bindir("shell.bin"));
-  for (i = 0; system_files[i]; i += 3)
-    add_file(out, bindir(system_files[i]), system_files[i + 1],
-	     system_files[i + 2]);
+  copy_file(out, base_file);
 
-  for (i = 2; i < argc; i++) {
-    char *s = strdup(argv[i]);
+  for (optind++; optind < argc; optind++) {
+    char *s = strdup(argv[optind]);
     char *t, *u;
     
     t = basename(s);
@@ -150,11 +134,12 @@ main(int argc, char **argv)
     if (u) *u++ = 0;
     else u = "???";
 
-    add_file(out, argv[i], t, u);
+    add_file(out, argv[optind], t, u);
     free(s);
   }
 
-  end(out);
+  if (!dont_close)
+    end(out);
 
   fclose(out);
   return 0;

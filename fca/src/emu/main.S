@@ -158,12 +158,6 @@ int_handler:
 	ldr	r1, [r0, #GBA_IE]
 	str	r1, [r0, #GBA_IE]
 
-#if 0
-	ldr	r2, [r0, #GBA_KEY]
-	tst	r2, #GBA_KEY_R | GBA_KEY_L
-	beq	emu_panic_from_int
-#endif
-	
 	mov	r1, r1, lsr #16
 	stmfd	sp!, {r1, lr}
 
@@ -172,14 +166,13 @@ int_handler:
 	addne	r0, r0, #1
 	strne	r0, vbl_count
 	blne	vbl_handler
-#if 1
+
 	ldr	r1, [sp]
 	tst	r1, #GBA_IRQ_TIMERn(0)
 	ldrne	r0, timer_count
 	addne	r0, r0, #1
 	strne	r0, timer_count
 	blne	timer0_handler
-#endif
 
 	mov	r0, #GBA_REG_BASE
 	mov	r2, #1
@@ -236,8 +229,17 @@ install_hsync_handler:
 
 current_line:	.long	0
 
-999:	.string "ch5 %x\n"
-	ALIGN
+
+sync_vbl_value:	.long	0
+
+sync_gba_vbl:	
+	ldr	r0, sync_vbl_value
+1:	
+	ldr	r1, vbl_count
+	teq	r0, r1
+	beq	1b
+	str	r1, sync_vbl_value
+	mov	pc, lr
 
 #define CYCLES_PER_LINE 114
 
@@ -254,10 +256,13 @@ emulate_frame:
 	bne	1f
 	bl	enter_L_menu
 	ldmnefd	sp!, {pc}
+
 1:	
 	@@ 
 	@@ フレームの開始
 	@@ 
+	bl	sync_gba_vbl
+
 	mov	r0, #0
 	str	r0, current_line
 	bl	ppu_start_frame

@@ -103,6 +103,7 @@ load_mapper(int num)
 {
   struct file f;
   void *p;
+#if 0
   int i;
 
   for (i = 0; mapper_list[i].file; i++)
@@ -113,6 +114,10 @@ load_mapper(int num)
     return 0;
 
   p = open_file(mapper_list[i].file, "bin", &f);
+#endif
+  char buf[MAX_NAME_LEN];
+  sprintf(buf, "mapper%d", num);
+  p = open_file(buf, "bin", &f);
   if (!p)
     return 0;
 

@@ -188,7 +188,7 @@ yes_or_no_draw(struct window *wn)
   if (yes_is_default)
     printfxy(wn->x + 1, wn->y + 1, " はい\n\n いいえ");
   else
-    printfxy(wn->x + 1, wn->y + 1, " いいえ\n\nはい");
+    printfxy(wn->x + 1, wn->y + 1, " いいえ\n\n はい");
   draw_cursor(wn->x + 1, wn->y + ((yes_or_no_pos)? 3: 1));
 }
 

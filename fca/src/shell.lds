@@ -75,11 +75,11 @@ SECTIONS
 
   OVERLAY _emu_end : NOCROSSREFS
     {
-      mapper0
+      mapper
         {
          _start_mapper = .;
-         *(mapper0)
-        }
+	}
+      mapper0 { *(mapper0) }
       mapper1 { *(mapper1) }
       mapper2 { *(mapper2) }
       mapper3 { *(mapper3) }
@@ -89,9 +89,4 @@ SECTIONS
       mapper21 { *(mapper21) }
       mapper66 { *(mapper66) }
     }
-
-  _vram    = 0x06000000;
-  _palette = 0x05000000;
-  _sprite  = 0x07000000;
-  _ioreg   = 0x04000000;
 }

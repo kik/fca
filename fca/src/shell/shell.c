@@ -73,7 +73,7 @@ select_save_file(char *name, char *ext, struct file *f)
 {
   int i;
 
-  i = select_file(save_file_writable);
+  i = select_file("セーブするファイルのせんたく", 16, save_file_writable);
   if (i < 0)
     return 0;
 
@@ -111,7 +111,7 @@ load_file()
 {
   int i;
 
-  i = select_file(nes_file);
+  i = select_file("ゲームのせんたく", 10, nes_file);
 
   if (i >= 0) {
     struct file f;
@@ -130,7 +130,6 @@ load_file()
 	run_emulator(p, 0, 0);
       }
     } else {
-    {
       run_emulator(p, 0, 0);
     }
 #else
@@ -152,7 +151,7 @@ load_save_file()
 {
   int i;
 
-  i = select_file(save_file);
+  i = select_file("ロードするファイルのせんたく", 16, save_file);
 
   if (i >= 0) {
     struct file f, n;
@@ -271,6 +270,7 @@ start_shell(void)
 
 
 static char *L_menu_text[] = {
+  "もどる",
   "リセット",
 #ifndef KOMASAI
   "ほぞん",
@@ -297,9 +297,9 @@ L_button_menu(struct L_menu *p)
     int n;
 
 #ifdef KOMASAI
-    push_menu_window(&menu, 2, 2, 9, 2, 2);
-#else
     push_menu_window(&menu, 2, 2, 9, 3, 3);
+#else
+    push_menu_window(&menu, 2, 2, 9, 4, 4);
 #endif
 
     menu.draw_item = draw_L_menu;
@@ -309,10 +309,10 @@ L_button_menu(struct L_menu *p)
     pop_window(&menu.wn);
 
     switch (n) {
-    case 0:
+    case 1:
       p->reset = 1;
       goto end;
-    case 1:
+    case 2:
 #ifndef KOMASAI
       if (nes_has_save_ram(loaded_file.start)) {
 	struct file f;
@@ -323,10 +323,11 @@ L_button_menu(struct L_menu *p)
 	}
       }
       break;
-    case 2:
+    case 3:
 #endif
       p->exit = 1;
       goto end;
+    case 0:
     case -1:
       goto end;
     }

@@ -403,6 +403,7 @@ run_menu_window(struct menu_window *menu, int *param)
 }
 
 static void *(*select_file_get_file)(int n, struct file *f);
+static char *select_file_msg;
 
 static void
 select_file_draw_item(struct menu_window *menu, int n, int x, int y)
@@ -419,22 +420,37 @@ select_file_draw_item(struct menu_window *menu, int n, int x, int y)
   }
 }
 
-int
-select_file(void *(*get_file)(int n, struct file *f))
+static void
+select_file_draw_msg(struct window *wn)
 {
-  int n;
-  struct menu_window menu;
+  putsxy(select_file_msg, wn->x + 1, wn->y + 1);
+}
+
+int
+select_file(char *msg, int width, void *(*get_file)(int n, struct file *f))
+{
+  struct window msg_window;
   int i;
 
-  for (n = 0; get_file(n, 0); n++)
-    ;
-  push_menu_window(&menu, 0, 2, 30, n, 7);
-  menu.draw_item = select_file_draw_item;
-  select_file_get_file = get_file;
+  push_window(&msg_window, 0, 0, width, 3);
+  msg_window.draw = select_file_draw_msg;
+  select_file_msg = msg;
+  while (run_window(&msg_window, 0)) {
+    struct menu_window menu;
+    int n;
 
-  while (run_menu_window(&menu, &i))
-    ;
-  pop_window(&menu.wn);
+    for (n = 0; get_file(n, 0); n++)
+      ;
+    push_menu_window(&menu, 0, 3, 30, n, 7);
+    menu.draw_item = select_file_draw_item;
+    select_file_get_file = get_file;
+    
+    while (run_menu_window(&menu, &i))
+      ;
+    pop_window(&menu.wn);
+    quit_window(&msg_window);
+  }
+  pop_window(&msg_window);
   return i;
 }
 

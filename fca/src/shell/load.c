@@ -61,7 +61,7 @@ nes_mapper(struct nes_header *p)
   return (p->rom_ctl_1 >> 4) | (p->rom_ctl_2 & 0xF0);
 }
 
-static void
+static int
 load_emulator()
 {
   struct file f;
@@ -69,13 +69,15 @@ load_emulator()
 
   p = open_file("emu", "bin", &f);
   if (!p)
-    panic_no_such_file("emu", "bin");
+    return 0;
   memcpy(&_emu_start, p, f.length);
 
   p = open_file("emuslow", "bin", &f);
   if (!p)
-    panic_no_such_file("emuslow", "bin");
+    return 0;
   memcpy(&_emu_slow_start, p, f.length);
+
+  return 1;
 }
 
 struct mapper {
@@ -125,8 +127,14 @@ run_emulator(struct nes_header *p,
     return 0;
   }
 
-  load_emulator();
-  load_mapper(opt->mapper_num = nes_mapper(p));
+  if (!load_emulator()) {
+    warn(ERROR "ひつようなファイルをひらけません。");
+    return 0;
+  }
+  if (!load_mapper(opt->mapper_num = nes_mapper(p))) {
+    warn(ERROR "マッパーをサポートしていません。");
+    return 0;
+  }
   
   opt->n_prg_rom = p->n_prg_rom;
   opt->n_chr_rom = p->n_chr_rom;

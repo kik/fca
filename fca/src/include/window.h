@@ -58,7 +58,7 @@ void push_menu_window(struct menu_window *menu, int x, int y,
 int run_menu_window(struct menu_window *menu, int *param);
 
 struct file;
-int select_file(void *(get_file)(int n, struct file *f));
+int select_file(char *msg, int width, void *(get_file)(int n, struct file *f));
 
 void warn(char *fmt, ...);
 

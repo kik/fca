@@ -751,37 +751,66 @@ vbl_handler:
 @@@				||+++++++---NES Tile# & 0xFE
 @@@				++---00(# & 1 == 0), 01(# & 1 == 1)
 
-nes_sprite_0:	.long	0
+nes_sprite_0:	
+nes_sprite:	.fill	64, 4, 0
 
-@@@ 
-@@@ スプライトDMA
-@@@ 
 	.globl	spr_dma
 spr_dma:	
-	stmfd	sp!, {r4, r5, REG_P_REST, lr}
-	ldr	REG_P_REST, spr_old
-	@@ r0 = DMA src
 	sub	REG_CYCLE, REG_CYCLE, #512
 	sub	REG_CYCLE, REG_CYCLE, #2
+	adr	r1, nes_sprite
+	mov	r2, #64
+1:	ldr	r3, [r0], #4
+	str	r3, [r1], #4
+	subs	r2, r2, #1
+	bne	1b
+	mov	pc, lr
+
+@@@ 
+@@@ $2003 に書く
+@@@ 
+
+ppu_reg_2003:	.byte	0
+	
+	ALIGN
+
+write_2003:	
+	strb	r0, ppu_reg_2003
+	mov	pc, lr
+
+@@@ 
+@@@ $2004 に書く
+@@@ 
+
+write_2004:
+	ldrb	r1, ppu_reg_2003
+	add	r2, r1, #1
+	strb	r2, ppu_reg_2003
+
+	adr	r3, nes_sprite
+	strb	r0, [r3, r1]
+
+	mov	pc, lr
+
+validate_spr:	
+	stmfd	sp!, {r4, r5, lr}
+	adr	r0, nes_sprite
 	adr	r1, gba_sprite
 	mov	r2, #64
-	ldr	r3, [r0], #4
-	str	r3, nes_sprite_0
 1:	
+	ldr	r3, [r0], #4
 	@@ Y
 	and	r5, r3, #255
-#if 0
-	adr	r4, skip_table
-	ldrb	r4, [r4, r5]
-#endif
 	sub	r5, r5, #15
 	add	r5, r5, r5, lsl #1
 	mov	r5, r5, lsr #2
 	strb	r5, [r1], #8
 
-@	ldrh	r4, [r1, #-6]
-@	and	r4, r4, #0xC000
-@	orr	r4, r4, r3, lsr #24
+	mov	r5, #0
+	tst	REG_P_REST, #P_REST_SPR_SZ
+	movne	r5, #0x80
+	strb	r5, [r1, #-7]
+
 	mov	r4, r3, lsr #24
 	sub	r4, r4, #8
 	bic	r4, r4, #0xFE00
@@ -810,209 +839,11 @@ spr_dma:
 	strh	r4, [r1, #-4]
 
 	subs	r2, r2, #1
-	ldrne	r3, [r0], #4
 	bne	1b
-	ldmfd	sp!, {r4, r5, REG_P_REST, pc}
+	ldmfd	sp!, {r4, r5, pc}
 
 gba_sprite:	
 	.fill	64, 8, 0
-
-	ALIGN
-@@@ 
-@@@ $2003 に書く
-@@@ 
-
-ppu_reg_2003:	.byte	0
-	
-	ALIGN
-
-write_2003:	
-	strb	r0, ppu_reg_2003
-	mov	pc, lr
-
-@@@ 
-@@@ $2004 に書く
-@@@ 
-
-write_2004:
-	str	REG_P_REST, spr_old
-	ldrb	r1, ppu_reg_2003
-	add	r2, r1, #1
-	strb	r2, ppu_reg_2003
-
-	cmp	r2, #4
-	adr	r3, nes_sprite_0
-	strccb	r0, [r3, r2]
-
-	mov	r2, r1, ror #2
-	adr	r3, gba_sprite
-	add	r3, r3, r2, lsl #3
-	ldr	pc, [pc, r2, lsr #28]
-	nop
-	.long	write_spr_0
-	.long	write_spr_1
-	.long	write_spr_2
-	.long	write_spr_3
-
-write_spr_0:
-	@@ Spr Y
-	sub	r0, r0, #15
-	add	r0, r0, r0, lsl #1
-	mov	r0, r0, lsr #2
-	strb	r0, [r3]
-	mov	pc, lr
-
-write_spr_1:	
-	@@ Tile #
-	tst	REG_P_REST, #P_REST_SPR_SZ
-	bne	1f
-	ldrh	r1, [r3, #4]
-	and	r1, r1, #0xFC00
-	orr	r1, r1, r0
-	tst	REG_P_REST, #P_REST_SPR_ADR
-	orrne	r1, r1, #0x100
-	strh	r1, [r3, #4]
-	mov	pc, lr
-1:	
-	@@ 8x16
-	ldrh	r1, [r3, #4]
-	and	r1, r1, #0xFC00
-	movs	r0, r0, lsr #1
-	orrcs	r1, r1, #0x100
-	orr	r1, r1, r0, lsl #1
-
-	strh	r1, [r3, #4]
-	mov	pc, lr
-
-write_spr_2:
-	@@ Palette, Prio
-	ldrb	r1, [r3, #5]
-	bic	r1, r1, #0xFC
-	and	r2, r0, #0x3
-	orr	r1, r1, r2, lsl #4
-	tst	r0, #0x20
-	orrne	r1, r1, #0x0C
-	strb	r1, [r3, #5]
-	@@ H flip, V flip
-	ldrb	r1, [r3, #3]
-	bic	r1, r1, #0x30
-	and	r0, r0, #0xC0
-	orr	r1, r1, r0, lsr #2
-	strb	r1, [r3, #3]
-	mov	pc, lr
-
-write_spr_3:	
-	@@ Spr X
-	sub	r0, r0, #8
-	ldrh	r1, [r3, #2]
-	and	r1, r1, #0xFE00
-	bic	r0, r0, #0xFE00
-	orr	r0, r1, r0
-	strh	r0, [r3, #2]
-	mov	pc, lr
-
-spr_old:	.long	0
-
-validate_spr:	
-	ldr	r0, spr_old
-	eor	r1, r0, REG_P_REST
-	str	REG_P_REST, spr_old
-
-	@@ SPRの設定が変更されたか？
-	tst	r1, #(P_REST_SPR_SZ | P_REST_SPR_ADR)
-	moveq	pc, lr
-
-	tst	r1, #P_REST_SPR_SZ
-	bne	1f
-	@@ SPRアドレスのみ更新
-	tst	REG_P_REST, #P_REST_SPR_ADR
-	bne	set_spr_adr_1
-	b	set_spr_adr_0
-1:	
-	@@ SPRサイズが更新された
-	tst	REG_P_REST, #P_REST_SPR_SZ
-	bne	set_spr_8x16
-	b	set_spr_8x8
-
-
-@@@
-@@@ スプライトのサイズが8x16から8x8に変更された
-@@@ 
-set_spr_8x8:	
-	adr	r0, gba_sprite
-	mov	r2, #64
-1:	
-	ldrh	r1, [r0]
-	bic	r1, r1, #0xC000
-	strh	r1, [r0], #4
-	ldrh	r1, [r0]
-	tst	r1, #0x0100
-	orrne	r1, r1, #1
-	tst	REG_P_REST, #P_REST_SPR_ADR
-	biceq	r1, r1, #0x0100
-	orrne	r1, r1, #0x0100
-	strh	r1, [r0], #4
-
-	subs	r2, r2, #1
-	bne	1b
-	mov	pc, lr
-
-@@@ 
-@@@ スプライトのサイズが8x8から8x16に変更された
-@@@ 
-set_spr_8x16:	
-	adr	r0, gba_sprite
-	mov	r2, #64
-1:	
-	ldrh	r1, [r0]
-	orr	r1, r1, #0x8000
-	strh	r1, [r0], #4
-	ldrh	r1, [r0]
-	tst	r1, #0x0001
-	biceq	r1, r1, #0x0100
-	orrne	r1, r1, #0x0100
-	bic	r1, r1, #1
-	strh	r1, [r0], #4
-
-	subs	r2, r2, #1
-	bne	1b
-	mov	pc, lr
-
-@@@ 
-@@@ スプライトのアドレスが0に変更された
-@@@ 
-set_spr_adr_0:	
-	adr	r0, gba_sprite
-	mov	r2, #32
-1:	
-	ldrh	r1, [r0, #4]!
-	bic	r1, r1, #0x0100
-	strh	r1, [r0], #4
-
-	ldrh	r1, [r0, #4]!
-	bic	r1, r1, #0x0100
-	strh	r1, [r0], #4
-
-	subs	r2, r2, #1
-	bne	1b
-	mov	pc, lr
-
-
-set_spr_adr_1:	
-	adr	r0, gba_sprite
-	mov	r2, #32
-1:	
-	ldrh	r1, [r0, #4]!
-	orr	r1, r1, #0x0100
-	strh	r1, [r0], #4
-
-	ldrh	r1, [r0, #4]!
-	orr	r1, r1, #0x0100
-	strh	r1, [r0], #4
-
-	subs	r2, r2, #1
-	bne	1b
-	mov	pc, lr
 
 init_gba_spr:	
 	mov	r0, #0x07000000

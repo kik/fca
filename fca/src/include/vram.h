@@ -31,4 +31,16 @@
 #define FONT_CUR_L    0xF106
 #define FONT_CUR_R    0xF506
 
+#ifndef __ASSEMBLY__
+
+void init_font();
+void refresh_screen();
+void putcxy(short c, int x, int y);
+void putsxy(unsigned char *s, int x, int y);
+void printfxy(int x, int y, unsigned char *s, ...);
+void draw_rect(int x, int y, int w, int h);
+void clear_screen();
+
+#endif
+
 #endif

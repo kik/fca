@@ -1,7 +1,8 @@
 #include "nes.h"
+#include "struct.h"
 
 	.section mapper0, "awx"
-init_mapper0:
+reset_mapper0:
 	adr	r0, m0_write_rom
 	b	install_rom_write_handler
 
@@ -15,21 +16,17 @@ m0_write_rom:
 #define M1_512K		1
 #define M1_SMALL	2
 
-init_mapper1:	
+reset_mapper1:	
 	stmfd	sp!, {lr}
 
-	ldr	r0, = emu_opt_chr_rom_start
-	ldr	r0, [r0]
+	ldopt	r0, EMU_OPT_chr_rom_start
 	str	r0, m1_chr_rom
-	ldr	r0, = emu_opt_n_chr_rom
-	ldr	r0, [r0]
+	ldopt	r0, EMU_OPT_n_chr_rom
 	str	r0, m1_n_chr_rom
 
-	ldr	r0, = emu_opt_prg_rom_start
-	ldr	r0, [r0]
+	ldopt	r0, EMU_OPT_prg_rom_start
 	str	r0, m1_prg_rom
-	ldr	r1, = emu_opt_n_prg_rom
-	ldr	r1, [r1]
+	ldopt	r1, EMU_OPT_n_prg_rom
 	mov	r2, #M1_SMALL
 	teq	r1, #64
 	moveq	r2, #M1_1024K
@@ -54,6 +51,14 @@ init_mapper1:
 	strb	r2, m1_bank1
 
 	bl	m1_set_cpu_banks
+
+	mov	r0, #0
+	str	r0, m1_write_rom_count
+	str	r0, m1_bits
+	str	r0, m1_last_write_addr
+	str	r0, m1_regs
+	mov	r0, #0x0C
+	strb	r0, m1_regs
 
 	adr	r0, m1_write_rom
 	bl	install_rom_write_handler
@@ -310,14 +315,12 @@ m1_write_rom:
 
 
 	.section mapper2, "awx"
-init_mapper2:	
+reset_mapper2:	
 	stmfd	sp!, {lr}
-	ldr	r0, = emu_opt_prg_rom_start
-	ldr	r0, [r0]
+	ldopt	r0, EMU_OPT_prg_rom_start
 	str	r0, m2_prg_rom
 
-	ldr	r1, = emu_opt_n_prg_rom
-	ldr	r1, [r1]
+	ldopt	r1, EMU_OPT_n_prg_rom
 	str	r1, m2_n_prg_rom
 
 	add	r0, r0, r1, lsl #14
@@ -344,12 +347,10 @@ m2_n_prg_rom:	.long	0
 	.section mapper3, "awx"
 
 
-init_mapper3:	
-	ldr	r0, =emu_opt_chr_rom_start
-	ldr	r0, [r0]
+reset_mapper3:	
+	ldopt	r0, EMU_OPT_chr_rom_start
 	str	r0, m3_chr_rom
-	ldr	r0, =emu_opt_n_chr_rom
-	ldr	r0, [r0]
+	ldopt	r0, EMU_OPT_n_chr_rom
 	sub	r0, r0, #1
 	str	r0, m3_n_chr_rom
 	adr	r0, m3_write_rom
@@ -384,29 +385,35 @@ m3_write_rom:
 	.pool
 
 	.section mapper4, "awx"
-init_mapper4:	
+reset_mapper4:	
 	stmfd	sp!, {lr}
-	ldr	r0, = emu_opt_prg_rom_start
-	ldr	r0, [r0]
+
+	mov	r0, #0
+	str	r0, m4_regs
+	str	r0, m4_regs + 4
+	str	r0, m4_enb_irq
+	ldr	r0, = 0x03020100
+	str	r0, m4_chr0
+	ldr	r0, = 0x07060504
+	str	r0, m4_chr4
+
+	ldopt	r0, EMU_OPT_prg_rom_start
 	str	r0, m4_prg_rom
 	str	r0, m4_prg0
 	add	r1, r0, #0x2000
 	str	r1, m4_prg1
 
-	ldr	r1, = emu_opt_n_prg_rom
-	ldr	r1, [r1]
+	ldopt	r1, EMU_OPT_n_prg_rom
 	str	r1, m4_n_prg_rom
 
 	add	r0, r0, r1, lsl #14
 	sub	r0, r0, #0x4000
 	str	r0, m4_prg_rom_last
 
-	ldr	r0, = emu_opt_chr_rom_start
-	ldr	r0, [r0]
+	ldopt	r0, EMU_OPT_chr_rom_start
 	str	r0, m4_chr_rom
 
-	ldr	r0, = emu_opt_n_chr_rom
-	ldr	r0, [r0]
+	ldopt	r0, EMU_OPT_n_chr_rom
 	str	r0, m4_n_chr_rom
 
 	adr	r0, m4_write_rom
@@ -558,20 +565,12 @@ m4_write_E000:
 	mov	r0, #0
 	str	r0, m4_enb_irq
 	mov	pc, lr
-	adr	r0, 1f
-	b	emu_printf
-	mov	pc, lr
+
 m4_write_E001:
 	strb	r0, m4_regs + 7
 	mov	r0, #1
 	str	r0, m4_enb_irq
 	mov	pc, lr
-	adr	r0, 2f
-	b	emu_printf
-	mov	pc, lr
-1:	.string	"irq disable\n"
-2:	.string	"irq enable\n"
-	ALIGN
 
 m4_set_cpu_banks:
 	stmfd	sp!, {lr}

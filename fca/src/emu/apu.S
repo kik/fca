@@ -709,13 +709,6 @@ init_apu:
 	ldr	r0, triangle + 12
 	str	r0, [r1, #0x9C]
 
-#if 0
-	mov	r0, #0
-	str	r0, [r1, #GBA_SG10]
-	mov	r0, #0x8000
-	str	r0, [r1, #GBA_SG11]
-#endif
-
 	ldr	r1, =freq_table
 	mov	r2, #0x1000
 	ldr	r3, =0x012B
@@ -733,6 +726,10 @@ init_apu:
 	@mov	pc, lr
 
 	.pool
+
+	.globl	reset_apu
+reset_apu:	
+	mov	pc, lr
 
 	SECTION_SLOW
 
@@ -766,3 +763,12 @@ write_high_reg:
 	.long	write_4010, write_4011, write_4012, write_4013
 	.long	write_4014, write_4015, write_4016, write_4017
 
+	.globl	leave_emu_sound
+	.globl	exit_apu
+leave_emu_sound:	
+exit_apu:	
+	mov	pc, lr
+
+	.globl	enter_emu_sound
+enter_emu_sound:	
+	mov	pc, lr

@@ -2,6 +2,7 @@
 #include "file.h"
 #include "text.h"
 #include "load.h"
+#include "struct.h"
 #include "lib.h"
 
 extern long _emu_start;
@@ -112,16 +113,6 @@ load_mapper(int num)
 
   return 1;
 }
-
-#if 0
-extern int n_prg_rom;
-extern int n_chr_rom;
-extern int mapper_num;
-extern int scroll_type;
-extern int has_sram;
-extern void *prg_rom_start;
-extern void *chr_rom_start;
-#endif
 
 int
 run_emulator(struct nes_header *p, 

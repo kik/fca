@@ -79,6 +79,9 @@ init_font()
   writeh(GBA_DISP_CR, GBA_DISP_CR_MODE(0) | GBA_DISP_CR_ENB_BG0);
   writeh(GBA_BGn_CR(0), GBA_BG_CR_MAP_ADDR(0x1F) | GBA_BG_CR_TILE_ADDR(2));
 
+  writeh(GBA_BGn_X(0), 0);
+  writeh(GBA_BGn_Y(0), 0);
+
   write_palette(0xF1, RGB(0, 0, 0));
   write_palette(0xFF, RGB(31, 31, 31));
 }
@@ -255,78 +258,3 @@ clear_screen()
       putcxy(FONT_TOFU_TR, j, i);
 }
 
-static int test_n;
-
-void
-test_draw(struct window *wn)
-{
-  draw_rect(wn->x, wn->y, wn->w, wn->h);
-  printfxy(wn->x + 1, wn->y + 1, "ほげーら\n\nほげほげ\n\n%d", test_n);
-}
-
-static char *menu_items[] = {
-  "めにゅ0", "めにゅ1", "めにゅ2", "めにゅ3",
-  "めにゅ4", "めにゅ5", "めにゅ6", "めにゅ7",
-  "めにゅ8", "めにゅ9", "めにゅA", "めにゅB",
-  "めにゅC", "めにゅD", "めにゅE", "めにゅF",
-};
-
-static char *
-test_menu_item(struct menu_window *menu, int n)
-{
-  return menu_items[n];
-}
-
-void
-font_test()
-{
-  struct message_window mwn;
-
-  push_message_window(&mwn);
-  set_message_widow(&mwn, "ほげー");
-
-  for (;;) {
-    int ev;
-    int sel;
-    struct menu_window menu;
-
-    while ((ev = run_message_window(&mwn, 0)))
-      if (ev == EV_NEXT_MSG)
-	break;
-    if (yes_or_no())
-      set_message_widow(&mwn, "ほげらー");
-    else
-      set_message_widow(&mwn, "たれぱんだー");
-
-    push_menu_window(&menu, 2, 2, 10, 7, 3);
-    //menu.menu_item = test_menu_item;
-    while ((ev = run_menu_window(&menu, &sel)))
-      ;
-    pop_window(&menu.wn);
-    if (sel < 0)
-      set_message_widow(&mwn, "ほげほげー");
-    else
-      set_message_widow(&mwn, menu_items[sel]);
-  }
-
-#if 0
-  struct window wn;
-  int ev;
-
-  push_window(&wn, 1, 1, 10, 18);
-  wn.draw = test_draw;
-  while ((ev = run_window(&wn, 0))) {
-    switch (ev) {
-    case EV_KEY_PRESS:
-      if (yes_or_no()) {
-	test_n++;
-	wn.ev = 1 << EV_DRAW;
-      }
-      break;
-    }
-  }
-  //draw_rect(1, 1, 10, 18);
-
-  //printfxy(2, 2, "ほげら\n\n%d\n\n%d\n\n%d\n\n%d", 99999, -1024, 417, -0);
-#endif
-}

@@ -1757,9 +1757,9 @@ do_int:
 @@@ 
 @@@ リセットの処理
 @@@ 
-	.globl	cpu_reset
+	.globl	reset_cpu
 
-cpu_reset:
+reset_cpu:	
 	stmfd	sp!, {lr}
 	mov	REG_NZ, #0
 	@@ REG_P_RESET の上8ビットはSなのでマスクしないと

@@ -1,6 +1,7 @@
 
 #include "nes.h"
 #include "gba-regs.h"
+#include "struct.h"
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -23,28 +24,11 @@ reg_save:
 
 @@@ 
 @@@ エミュレータのオプション
-@@@ ローダが設定するinclude/load.hを参照
+@@@ ローダが設定するinclude/struct.hを参照
 @@@ 
+
 	.globl	emulator_opt
-	.globl	emu_opt_n_prg_rom
-	.globl	emu_opt_n_chr_rom
-	.globl	emu_opt_mapper_num
-	.globl	emu_opt_scroll_type
-	.globl	emu_opt_has_sram
-	.globl	emu_opt_prg_rom_start
-	.globl	emu_opt_chr_rom_start
-	.globl	emu_opt_save_ram_write
-	.globl	emu_opt_save_ram_read
-emulator_opt:	
-emu_opt_n_prg_rom:	.long	0
-emu_opt_n_chr_rom:	.long	0
-emu_opt_mapper_num:	.long	0
-emu_opt_scroll_type:	.long	0
-emu_opt_has_sram:	.long	0
-emu_opt_prg_rom_start:	.long	0
-emu_opt_chr_rom_start:	.long	0
-emu_opt_save_ram_write:	.long	0
-emu_opt_save_ram_read:	.long	0
+emulator_opt:	.fill	EMU_OPT_size, 1, 0
 
 @@@ 
 @@@ エントリポイント
@@ -62,6 +46,8 @@ emulator_entry:
 	bl	init_emulator
 	bl	init_interrupt
 	bl	run_emulator
+
+	bl	exit_emulator
 
 	@@ レジスタを復元
 	ldr	ip, =reg_save
@@ -83,6 +69,30 @@ init_emulator:
 	ldmfd	sp!, {pc}
 
 @@@ 
+@@@ 
+@@@ 
+reset_emulator:	
+	stmfd	sp!, {lr}
+	bl	reset_mapper
+	bl	reset_ppu
+	bl	reset_apu
+	bl	reset_cpu
+	ldmfd	sp!, {pc}
+
+
+exit_emulator:	
+	stmfd	sp!, {lr}
+
+	@@ まず割り込みを止める
+	mov	r0, #GBA_REG_BASE
+	mov	r1, #0
+	str	r1, [r0, #GBA_IME]
+
+	bl	exit_ppu
+	bl	exit_apu
+	ldmfd	sp!, {pc}
+
+@@@ 
 @@@ デバッグ用のprintf
 @@@ かなり遅いので注意して使う
 @@@ 
@@ -95,34 +105,6 @@ emu_printf:
 1:	ldmfd	sp!, {r0-r12,pc}
 
 	.pool
-
-#if 0
-@@@ 
-@@@ デバッグ用のパニック
-@@@ 
-@@@ r0 => パニックナンバー
-@@@ 
-	.globl	emu_panic_data
-
-emu_panic_data:
-	.long	0, 0, 0, 0	@ r0-r3
-	.long	0, 0, 0, 0	@ r4-r7
-	.long	0, 0, 0, 0	@ r8-r11
-	.long	0		@ r12
-	.long	0		@ pc_bank
-
-	.globl	emu_panic
-
-emu_panic:	
-	str	r0, emu_panic_data
-	adr	r0, emu_panic_data + 4
-	stmia	r0!, {r2-r12}
-	ldr	r1, =pc_bank
-	ldr	r1, [r1]
-	str	r1, [r0], #4
-	adr	r0, emu_panic_data
-	b	panic
-#endif
 
 @@@ 
 @@@ 割り込みの設定
@@ -262,46 +244,15 @@ current_line:	.long	0
 @@@ 
 run_emulator:	
 	stmfd	sp!, {lr}
-	bl	cpu_reset
+	bl	reset_emulator
 emulate_frame:	
-	@@ 
-	@@ R を押している間テキストを表示する
-	@@ Lを押しながらRを押すとパニック(デバッグ用)
-	@@ 
 	mov	r0, #GBA_REG_BASE
 	ldr	r1, [r0, #GBA_KEY]
-	tst	r1, #GBA_KEY_R
+	tst	r1, #GBA_KEY_L
 	bne	1f
-	@@ Rが押されている
-	tst	r1, #0x200
-	moveq	r0, #0x01000000
-	@@ Lも押されていればパニック
-	beq	emu_panic
-
-#if 1
-	ldr	r1, = ch5_reg
-	ldr	r1, [r1, #0x00]
-#if 0
-	ldr	r2, = ch2_reg
-	ldr	r2, [r2]
-#endif
-	adr	r0, 999b
-	bl	emu_printf
-#endif
-	mov	r0, #GBA_REG_BASE
-
-	mov	r2, #GBA_DISP_CR_ENB_BG3
-	ldr	r3, = GBA_BG_CR_MAP_ADDR(0x1C) | GBA_BG_CR_TILE_ADDR(2)
-2:	
-	strh	r2, [r0, #GBA_DISP_CR]
-	strh	r3, [r0, #GBA_BGn_CR(3)]
-
-	@@ Rが押されてる間ループ
-	ldr	r1, [r0, #GBA_KEY]
-	tst	r1, #GBA_KEY_R
-	beq	2b
+	bl	enter_L_menu
+	ldmnefd	sp!, {pc}
 1:	
-
 	@@ 
 	@@ フレームの開始
 	@@ 
@@ -324,12 +275,7 @@ emulate_frame:
 	blne	draw_line
 
 	ldr	r0, current_line
-#if 0
-	@@ SMB1はここでHITを立てる
-	@@ HITの実装をしなければ
-	teq	r0, #200
-	orreq	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT
-#endif
+
 	add	r0, r0, #1
 	str	r0, current_line
 	cmp	r0, #240
@@ -414,10 +360,47 @@ reg_4017:	.long	0xFF
 	.globl	write_4017
 write_4017:	
 	str	r0, reg_4017
-	tst	r0, #0xF0
-	movne	pc, lr
-	adr	r0, 1f
-	b	emu_printf
 	mov	pc, lr
-1:	.string	"4017\n"
-	ALIGN
+
+
+L_menu_dat:	.fill	L_MENU_size, 1, 0
+
+enter_L_menu:	
+	stmfd	sp!, {ip, lr}
+
+	@@ まず割り込みを止める
+	mov	r0, #GBA_REG_BASE
+	mov	r1, #0
+	str	r1, [r0, #GBA_IME]
+
+	bl	leave_emu_ppu
+	bl	leave_emu_sound
+
+	adr	r0, L_menu_dat
+	adr	lr, 1f
+	ldr	pc, = L_button_menu
+1:	
+	bl	enter_emu_ppu
+	bl	enter_emu_sound
+
+	ldr	r0, L_menu_dat + L_MENU_reset
+	teq	r0, #0
+	beq	2f
+	bl	reset_emulator
+
+2:	
+
+	ldr	r0, L_menu_dat + L_MENU_save_file_write
+	teq	r0, #0
+	blne	set_save_file_write
+
+	@@ 最後に割り込みを再開
+	mov	r0, #GBA_REG_BASE
+	mov	r1, #1
+	str	r1, [r0, #GBA_IME]
+
+	ldr	r0, L_menu_dat + L_MENU_exit
+	teq	r0, #0
+	ldmfd	sp!, {ip, pc}
+
+	.pool

@@ -1,9 +1,12 @@
+#include <stdarg.h>
+
 #include "gba.h"
 #include "gba-regs.h"
 
 #include "vram.h"
 #include "window.h"
 #include "file.h"
+#include "lib.h"
 
 /*
  * DQみたいなUI
@@ -75,7 +78,7 @@ draw_window(struct window *wn)
     wn->draw(wn);
 }
 
-static int
+static void
 wait_vblank()
 {
   while (readh(GBA_DISP_Y) != 160)
@@ -159,23 +162,29 @@ draw_cursor(int x, int y)
 }
 
 
-static int yes_or_no_flag;
+static int yes_is_default;
+static int yes_or_no_pos;
 
 static void
 yes_or_no_draw(struct window *wn)
 {
-  printfxy(wn->x + 1, wn->y + 1, " はい\n\n いいえ");
-  draw_cursor(wn->x + 1, wn->y + (yes_or_no_flag? 1: 3));
+  if (yes_is_default)
+    printfxy(wn->x + 1, wn->y + 1, " はい\n\n いいえ");
+  else
+    printfxy(wn->x + 1, wn->y + 1, " いいえ\n\nはい");
+  draw_cursor(wn->x + 1, wn->y + ((yes_or_no_pos)? 3: 1));
 }
 
-int
-yes_or_no()
+static int
+do_yes_or_no(int yes)
 {
   struct window wn;
   int ev;
   int key;
 
-  yes_or_no_flag = 1;
+  yes_is_default = yes;
+
+  yes_or_no_pos = 0;
   push_window(&wn, 24, 10, 6, 5);
   wn.draw = yes_or_no_draw;
 
@@ -185,14 +194,16 @@ yes_or_no()
       if (key & GBA_KEY_A) {
 	quit_window(&wn);
       } else if (key & GBA_KEY_B) {
-	yes_or_no_flag = 0;
-	quit_window(&wn);
+	if (yes) {
+	  yes_or_no_pos = 1;
+	  quit_window(&wn);
+	}
       } else if (key & GBA_KEY_DOWN) {
-	yes_or_no_flag = 0;
+	yes_or_no_pos = 1;
 	show_cursor();
 	redraw_window(&wn);
       } else if (key & GBA_KEY_UP) {
-	yes_or_no_flag = 1;
+	yes_or_no_pos = 0;
 	show_cursor();
 	redraw_window(&wn);
       }
@@ -203,7 +214,22 @@ yes_or_no()
     }
   }
   pop_window();
-  return yes_or_no_flag;
+  if (yes)
+    return !yes_or_no_pos;
+  else
+    return yes_or_no_pos;
+}
+
+int
+yes_or_no()
+{
+  return do_yes_or_no(1);
+}
+
+int
+no_or_yes()
+{
+  return do_yes_or_no(0);
 }
 
 
@@ -212,14 +238,14 @@ draw_message_window(struct window *wn)
 {
   struct message_window *mwn = (struct message_window *)wn;
 
-  putsxy(mwn->msg, wn->x + 1, wn->y + 1, wn->w, wn->h);
+  putsxy(mwn->msg, wn->x + 1, wn->y + 1);
 }
 
 void
 push_message_window(struct message_window *mwn)
 {
   push_window(&mwn->wn, 4, 11, 22, 9);
-  mwn->msg = "";
+  strcpy(mwn->msg, "");
   mwn->wn.draw = draw_message_window;
 }
 
@@ -241,7 +267,24 @@ run_message_window(struct message_window *mwn, int *param)
 void
 set_message_widow(struct message_window *mwn, char *msg)
 {
-  mwn->msg = msg;
+  strcpy(mwn->msg, msg);
+  redraw_window(&mwn->wn);
+}
+
+void
+set_message(struct message_window *mwn, char *fmt, ...)
+{
+  va_list va;
+  va_start(va, fmt);
+  vsprintf(mwn->msg, fmt, va);
+  va_end(va);
+  redraw_window(&mwn->wn);
+}
+
+void
+set_vmessage(struct message_window *mwn, char *fmt, va_list va)
+{
+  vsprintf(mwn->msg, fmt, va);
   redraw_window(&mwn->wn);
 }
 
@@ -377,3 +420,69 @@ select_file(void *(*get_file)(int n, struct file *f))
   pop_window(&menu.wn);
   return i;
 }
+
+void
+warn(char *fmt, ...)
+{
+  struct message_window message;
+  va_list va;
+  int ev;
+
+  va_start(va, fmt);
+  push_message_window(&message);
+  set_vmessage(&message, fmt, va);
+
+  while ((ev = run_message_window(&message, 0)))
+    if (ev == EV_NEXT_MSG)
+      quit_window(&message.wn);
+
+  pop_window(&message.wn);
+
+  va_end(va);
+}
+
+static int
+do_yes_or_no_message(int yes, char *fmt, va_list va)
+{
+  struct message_window message;
+  int ev;
+  int yn = 0;
+
+  push_message_window(&message);
+  set_vmessage(&message, fmt, va);
+
+  while ((ev = run_message_window(&message, 0))) {
+    if (ev == EV_NEXT_MSG) {
+      yn = do_yes_or_no(yes);
+      quit_window(&message.wn);
+    }
+  }
+  pop_window(&message.wn);
+
+  return yn;
+}
+
+int
+yes_or_no_message(char *fmt, ...)
+{
+  int yn;
+
+  va_list va;
+  va_start(va, fmt);
+  yn = do_yes_or_no_message(1, fmt, va);
+  va_end(va);
+  return yn;
+}
+
+int
+no_or_yes_message(char *fmt, ...)
+{
+  int yn;
+
+  va_list va;
+  va_start(va, fmt);
+  yn = do_yes_or_no_message(0, fmt, va);
+  va_end(va);
+  return yn;
+}
+

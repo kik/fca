@@ -1,6 +1,7 @@
 #include "gba.h"
 #include "file.h"
 #include "text.h"
+#include "window.h"
 #include "lib.h"
 
 static struct file_header *first_file;
@@ -171,6 +172,12 @@ write_save_file(char *name, char *ext, int n)
   struct save_file_header *p;
 
   p = &save_file_super.header[n];
+
+  if (p->magic == FILE_MAGIC) {
+    if (!yes_or_no_message("うわがきしますか？"))
+      return 0;
+  }
+
   memset(p, 0, sizeof *p);
   p->magic = FILE_MAGIC;
   strcpy(p->name, name);

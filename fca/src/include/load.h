@@ -12,20 +12,6 @@ struct nes_header {
 };
 
 
-// これを変更した場合はemu/main.Sも変更すること
-struct emulator_opt {
-  int n_prg_rom;
-  int n_chr_rom;
-  int mapper_num;
-  int scroll_type;
-  int has_sram;
-  void *prg_rom_start;
-  void *chr_rom_start;
-  void *save_file_write;
-  void *save_file_read;
-};
-
-extern struct emulator_opt emulator_opt;
 
 int run_emulator(struct nes_header *nes_file,
 		 struct file *save_w, struct file *save_r);

@@ -5,6 +5,10 @@
 #include "load.h"
 #include "window.h"
 #include "vram.h"
+#include "struct.h"
+#include "lib.h"
+
+static struct file loaded_file;
 
 static void *
 nes_file(int nth, struct file *f)
@@ -91,15 +95,20 @@ load_file()
     struct nes_header *p;
     p = nes_file(i, &f);
 
+    loaded_file = f;
     if (nes_has_save_ram(p)) {
       struct file s;
       if (select_save_file(f.name, "sav", &s))
 	run_emulator(p, &s, 0);
-      else
+      else {
+	warn(WARN "セーブデータはほぞんされません。\n\n"
+	     "Lメニューからほぞんできます。");
 	run_emulator(p, 0, 0);
+      }
     } else {
       run_emulator(p, 0, 0);
     }
+    init_font();
   }
 }
 
@@ -111,11 +120,12 @@ load_save_file()
   i = select_file(save_file);
 
   if (i >= 0) {
-    struct file f;
+    struct file f, n;
     void *p;
 
     save_file(i, &f);
-    p = open_file(f.name, "nes", 0);
+    p = open_file(f.name, "nes", &n);
+    loaded_file = n;
     if (!p)
       return;
     if (f.dev == DEV_RAM) {
@@ -123,14 +133,13 @@ load_save_file()
     } else {
       run_emulator(p, 0 , &f);
     }
+    init_font();
   }
 }
 
 static char *main_menu_item[] = {
   "つづきから",
   "はじめから",
-  "そのほか",
-  "たれ", "ぎゃ", "あう"
 };
 
 static void
@@ -147,11 +156,14 @@ main_menu()
   for (;;) {
     int n;
 
-    push_menu_window(&menu, 2, 2, 15, 6, 6);
+    push_menu_window(&menu, 2, 2, 8, 2, 2);
 
     menu.draw_item = draw_main_menu;
     while (run_menu_window(&menu, &n))
       ;
+
+    pop_window(&menu.wn);
+
     switch (n) {
     case 0:
       load_save_file();
@@ -160,37 +172,20 @@ main_menu()
       load_file();
       break;
     }
-
-    pop_window(&menu.wn);
   }
 }
 
 static void
 query_format()
 {
-  struct message_window mes;
-  int ev;
-
-  push_message_window(&mes);
-  set_message_widow(&mes,
-		    "セーブデータがこわれています。\n\n"
-		    "フォーマットしますか？");
-  while ((ev = run_message_window(&mes, 0))) {
-    if (ev == EV_NEXT_MSG) {
-      if (yes_or_no()) {
-	format_save_file_system();
-	quit_window(&mes.wn);
-      } else {
-	set_message_widow(&mes,
-			  "キャンセルしました。\n\n"
-			  "バックアップをとるなりして\n\n"
-			  "さいきどうしてください。");
-	while (run_message_window(&mes, 0))
-	  ;
-      }
-    }
+  if (no_or_yes_message("セーブデータがこわれています。\n\n"
+			"フォーマットしますか？")) {
+    format_save_file_system();
+  } else {
+    warn(WARN "キャンセルしました。\n\n"
+	 "バックアップをとるなりして\n\n"
+	 "さいきどうしてください。");
   }
-  pop_window(&mes.wn);
 }
 
 int
@@ -210,42 +205,67 @@ start_shell(void)
 }
 
 
+static char *L_menu_text[] = {
+  "リセット",
+  "ほぞん",
+  "しゅうりょう",
+};
+
+static void
+draw_L_menu(struct menu_window *menu, int n, int x, int y)
+{
+  printfxy(x, y, "%s", L_menu_text[n]);
+}
+
+void
+L_button_menu(struct L_menu *p)
+{
+  struct menu_window menu;
+
+  init_font();
+
+  memset(p, 0, sizeof *p);
+
+  for (;;) {
+    int n;
+
+    push_menu_window(&menu, 2, 2, 9, 3, 3);
+
+    menu.draw_item = draw_L_menu;
+    while (run_menu_window(&menu, &n))
+      ;
+
+    pop_window(&menu.wn);
+
+    switch (n) {
+    case 0:
+      p->reset = 1;
+      goto end;
+    case 1:
+      if (nes_has_save_ram(loaded_file.start)) {
+	struct file f;
+	
+	if (select_save_file(loaded_file.name, "sav", &f)) {
+	  p->save_file_write = f.start;
+	  goto end;
+	}
+      }
+      break;
+    case 2:
+      p->exit = 1;
+      goto end;
+    case -1:
+      goto end;
+    }
+  }
+ end:
+  while ((readh(GBA_KEY) & (GBA_KEY_B | GBA_KEY_A)) != (GBA_KEY_A | GBA_KEY_B))
+    ;
+}
+
 void
 panic(int op, int pc, unsigned char *sp, void *p)
 {
-#if 0
-  int i;
-
-  _ioreg[0x104] = 0;
-  _ioreg[0xBA / 2] = 0;
-  _ioreg[0xC6 / 2] = 0;
-  init_text_console(0, 2, 0x1C);
-
-  _ioreg[0] = 0x0140;
-  _ioreg[8] = 0;
-  _ioreg[9] = 0;
-  _ioreg[5] = 0x0704;
-  for (i = 0; i < 32 * 32; i++)
-    _vram[0x2000 + i] = i;
-
-  printf("PANIC!!!\n");
-  printf("OP: %x\n", op);
-  printf("PC: %x(%x)\n", pc, p);
-  printf("stack dump:\n");
-  
-  sp -= 32;
-  for (i = 0; i < 4; i++, sp += 8)
-    printf("%x %x %x %x %x %x %x %x\n", sp[0], sp[1], sp[2], sp[3],
-	   sp[4], sp[5], sp[6], sp[7]);
-
-  printf("---SP---\n");
-
-  for (i = 0; i < 4; i++, sp += 8)
-    printf("%x %x %x %x %x %x %x %x\n", sp[0], sp[1], sp[2], sp[3],
-	   sp[4], sp[5], sp[6], sp[7]);
-
-  compare_memory();
-#endif
   while (1)
     ;
 }
@@ -253,30 +273,6 @@ panic(int op, int pc, unsigned char *sp, void *p)
 void
 panic_from_int()
 {
-#if 0
-  int i;
-  int *p = (int *)0x03000000;
-
-  _ioreg[0xBA / 2] = 0;
-  _ioreg[0xC6 / 2] = 0;
-
-  init_text_console(0, 2, 0x1C);
-
-  _ioreg[0] = 0x0140;
-  _ioreg[8] = 0;
-  _ioreg[9] = 0;
-  //_ioreg[4] = 0x1C08;
-#if 0
-  for (i = 0; i < 32 * 32; i++)
-    _vram[0x2000 + i] = i;
-#endif
-  //printf("\n\n\n\n\n");
-  printf("PANIC from int!!!\n");
-  for (i = 0; i < 9; i++, p += 2)
-    printf("%x %x\n", p[0], p[1]);
-
-  compare_memory();
-#endif
   while (1)
     ;
 }

@@ -1,5 +1,6 @@
 #include "nes.h"
 #include "gba-regs.h"
+#include "struct.h"
 
 	SECTION_FAST
 	ALIGN
@@ -690,10 +691,15 @@ init_ppu:
 
 	ldmfd	sp!, {pc}
 
+	.globl	reset_ppu
+reset_ppu:	
+	mov	pc, lr
+	
+
+
 	.globl	ppu_start_vbl
 ppu_start_vbl:	
 	orr	REG_P_REST, REG_P_REST, #P_REST_IN_VBL
-	@orr	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT	
 	mov	pc, lr
 
 	.globl	ppu_end_vbl
@@ -701,6 +707,19 @@ ppu_end_vbl:
 	bic	REG_P_REST, REG_P_REST, #(P_REST_IN_VBL | P_REST_SPR_HIT)
 	mov	pc, lr
 
+	.globl leave_emu_ppu
+	.globl	exit_ppu
+leave_emu_ppu:	
+exit_ppu:	
+	mov	r0, #GBA_REG_BASE
+	mov	r1, #0
+	strh	r1, [r0, #GBA_DMAn_CR(0)]
+	strh	r1, [r0, #GBA_DMAn_CR(1)]
+	mov	pc, lr
+
+	.globl	enter_emu_ppu
+enter_emu_ppu:	
+	mov	pc, lr
 
 	.globl	read_save_ram
 	.globl	write_save_ram
@@ -729,8 +748,7 @@ save_data_write:	.long	0
 
 	.globl	init_save_ram
 init_save_ram:
-	ldr	r0, =emu_opt_save_ram_read
-	ldr	r0, [r0]
+	ldopt	r0, EMU_OPT_save_file_read
 	teq	r0, #0
 	beq	2f
 
@@ -742,14 +760,12 @@ init_save_ram:
 	bne	1b
 
 2:	
-	ldr	r0, =emu_opt_save_ram_write
-	ldr	r0, [r0]
+	ldopt	r0, EMU_OPT_save_file_write
 	ldr	r1, =save_data_write
 	str	r0, [r1]
 	teq	r0, #0
 	moveq	pc, lr
-	ldr	r1, =emu_opt_save_ram_read
-	ldr	r1, [r1]
+	ldopt	r1, EMU_OPT_save_file_read
 	teq	r0, r1
 	moveq	r0, r1
 
@@ -760,6 +776,22 @@ init_save_ram:
 	bne	3b
 
 	mov	pc, lr
+	.pool
+
+	.globl	set_save_file_write
+set_save_file_write:	
+	ldr	r1, = save_data_write
+	str	r0, [r1]
+	
+	adr	r1, save_ram
+	mov	r2, #0x2000
+1:	ldrb	r3, [r1], #1
+	strb	r3, [r0], #1
+	subs	r2, r2, #1
+	bne	1b
+
+	mov	pc, lr
+
 	.pool
 
 	.globl	save_ram

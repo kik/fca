@@ -14,25 +14,41 @@ OBJ = shell/shells.o emu/emu.o emu/mapper/mapper0.o
 
 MAPPER = mapper0.bin mapper1.bin mapper2.bin mapper3.bin mapper4.bin
 
-all: shell.gba
+BIN = shell.bin emu.bin emuslow.bin $(MAPPER)
 
-font: subdir
-	#./tool/selfont <data/font.dat.src >data/font.dat
+all: bindir
 
-shell.elf: subdir
-	$(LD) -o $@ $(OBJ) -T shell.lds -Map shell.map
+#font: subdir
+#	./tool/selfont <data/font.dat.src >data/font.dat
 
-bin/shell.bin: shell.elf
+#bindir: bin/shell.bin bin/emu.bin bin/emuslow.bin $(MAPPER:%=bin/%)
+
+bindir: $(BIN:%=bin/%)
+
+bin/fca.elf: subdir
+	$(LD) -o $@ $(OBJ) -T shell.lds -Map fca.map
+
+bin/shell.bin: bin/fca.elf
 	$(OBJCOPY) -O binary $< $@ -j .text -j .rodata -j .data
 
-bin/emu.bin: shell.elf
+bin/emu.bin: bin/fca.elf
 	$(OBJCOPY) -O binary $< $@ -j emu
 
-bin/emuslow.bin: shell.elf
+bin/emuslow.bin: bin/fca.elf
 	$(OBJCOPY) -O binary $< $@ -j emu.slow
 
-$(MAPPER:%=bin/%): shell.elf
+$(MAPPER:%=bin/%): bin/fca.elf
 	$(OBJCOPY) -O binary $< $@ -j $(@:bin/%.bin=%)
+
+subdir:
+	$(MAKE) -C shell
+	$(MAKE) -C emu
+	$(MAKE) -C tool
+clean:
+	rm -f $(BIN:%=bin/%) bin/fca.elf fca.map
+	$(MAKE) -C shell clean
+	$(MAKE) -C emu clean
+	$(MAKE) -C tool clean
 
 shell.gba: bin/shell.bin bin/emu.bin bin/emuslow.bin $(MAPPER:%=bin/%) font
 	cp bin/shell.bin shell.gba
@@ -56,14 +72,5 @@ shell.gba: bin/shell.bin bin/emu.bin bin/emuslow.bin $(MAPPER:%=bin/%) font
 #	./tool/addfile data/Dkong.nes	dkong.nes	>>shell.gba
 	./tool/endfile >>shell.gba
 
-subdir:
-	$(MAKE) -C shell
-	$(MAKE) -C emu
-	$(MAKE) -C tool
-clean:
-	rm -f *.o
-	$(MAKE) -C shell clean
-	$(MAKE) -C emu clean
-	$(MAKE) -C tool clean
 
 

@@ -369,3 +369,17 @@ panic_no_such_file(char *name, char *ext)
   while (1)
     ;
 }
+
+void
+cpu_test_ok()
+{
+  while (1)
+    warn("cpu test ok");
+}
+
+void
+cpu_test_fail(int n)
+{
+  while (1)
+    warn("cpu test fail %d", n);
+}

@@ -2,15 +2,6 @@
 @#define TEST(n)	mov	REG_CYCLE, #(n)
 .macro	TEST	m
 	mov	REG_CYCLE, #(\m)
-#if 0
-	adr	r0, 1f
-	mov	r1, #(\m)
-	adr	lr, 2f
-	b	emu_printf
-1:	.string	"TEST %x\n"
-	ALIGN
-2:	mov	REG_CYCLE, #(\m)
-#endif
 .endm
 
 #define A(n)	mov	REG_A, #(n << 24)
@@ -763,21 +754,7 @@ run_cpu_test:
 	OP_ROR_A
 	C_A(0x81);C_NZ;C_NC;C_N;C_NV
 
-
-
-	adr	r0, 1f
-	bl	emu_printf
-2:	b	2b	
-	ldmfd	sp!, {pc}
-1:	.string "cpu test ok\n"
-	ALIGN
+	ldr	pc, = cpu_test_ok
 fail:	
-	stmfd	sp!, {r0-r14}
-	mov	r1, REG_CYCLE
-	adr	r0, 1f
-	adr	lr, 2f
-	ldr	pc,=printf
-2:	ldmfd	sp!, {r0-r14}
-3:	b	3b
-1:	.string	"cpu test #%x failed\n"
-	.pool
+	mov	r0, REG_CYCLE
+	ldr	pc, = cpu_test_fail

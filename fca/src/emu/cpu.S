@@ -1,5 +1,7 @@
 #include "nes.h"
 
+//#define CPU_TEST
+
 @@@ 
 @@@ 内部RAMはREG_OP_TABLE相対でアクセスできる
 @@@ 
@@ -394,30 +396,6 @@
 	bic	REG_ADDR, REG_ADDR, #0x10000
 .endm
 
-
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@ 
-@@@ フラグのロード
-@@@ ARMのフラグをレジスタにロードする
-#if 0
-.macro	MRS_P
-	mrs	REG_P, CPSR
-.endm
-#endif
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@ 
-@@@ フラグのストア
-@@@ ARMのフラグにレジスタをストアする
-@@@ Mappy VM のバグで動かないので使わない
-#if 0
-.macro	MSR_P
-	bug	bug	bug
-	msr	CPSR_f, REG_P
-.endm
-#endif
-
 @@@ P を復元する
 @@@ r0		=> 6502 の P レジスタ
 @@@ REG_NZ	<= 復元された REG_NZ
@@ -547,9 +525,8 @@ op98:	@ TYA
 
 opBA:	@ TSX
 	IMPLIED
-	and	REG_X, REG_S, #0xFF << 24
-	mov	REG_NZ, REG_X, asr #24
-	mov	REG_X, REG_X, lsr #24
+	mov	REG_X, REG_S, lsr #24
+	orr	REG_NZ, REG_X, REG_X, lsl #24
 	CYCLE_NEXT	2
 
 op9A:	@ TXS
@@ -610,8 +587,7 @@ op28:	@ PLP
 
 .macro	OP_LDXY	reg
 	mov	\reg, r0
-	mov	REG_NZ, r0, lsl #24
-	mov	REG_NZ, REG_NZ, asr #24
+	orr	REG_NZ, r0, r0, lsl #24
 .endm
 
 .macro	OP_LDX
@@ -802,29 +778,25 @@ op8C:	@ STY $nnnn
 .macro	OP_INC
 	add	r0, r0, #1
 	and	r0, r0, #0xFF
-	mov	REG_NZ, r0, lsl #24
-	mov	REG_NZ, REG_NZ, asr #24
+	orr	REG_NZ, r0, r0, lsl #24
 .endm
 
 .macro	OP_INXY	reg
 	add	\reg, \reg, #1
 	and	\reg, \reg, #0xFF
-	mov	REG_NZ, \reg, lsl #24
-	mov	REG_NZ, REG_NZ, asr #24
+	orr	REG_NZ, \reg, \reg, lsl #24
 .endm
 
 .macro	OP_DEC
 	sub	r0, r0, #1
 	and	r0, r0, #0xFF
-	mov	REG_NZ, r0, lsl #24
-	mov	REG_NZ, REG_NZ, asr #24
+	orr	REG_NZ, r0, r0, lsl #24
 .endm
 
 .macro	OP_DEXY	reg
 	sub	\reg, \reg, #1	
 	and	\reg, \reg, #0xFF
-	mov	REG_NZ, \reg, lsl #24
-	mov	REG_NZ, REG_NZ, asr #24
+	orr	REG_NZ, \reg, \reg, lsl #24
 .endm
 
 opE6:	@ INC $nn
@@ -896,28 +868,26 @@ op88:	@ DEY
 @@@ キャリー/ボローつきの加算/減算
 
 .macro	OP_ADC
-	@@ restore carry
-	@@ なんか MappyVM の MSR にバグがあるのでこうする
-	tst	r0, REG_P_REST, lsr #1
-	@@ A の下24ビットをFFFFFFにする
-	subcs	REG_A, REG_A, #1
-	addcs	REG_A, REG_A, #1 << 24
+	@@ キャリーをセットして
+	movs	r1, REG_P_REST, lsr #1
+	@@ 上24ビットを全て1に
+	subcs	r0, r0, #0x100
 	@@ キャリーつきの加算
-	adcs	REG_A, REG_A, r0, lsl #24
+	adcs	REG_A, REG_A, r0, ror #8
 	mov	REG_NZ, REG_A, asr #24
-	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
-	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	adc	REG_P_REST, r1, r1
 	orrvs	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 	bicvc	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 .endm
 
 .macro	OP_SBC
-	tst	r0, REG_P_REST, lsr #1
+	@@ キャリーをセットして
+	movs	r1, REG_P_REST, lsr #1
+	@@ キャリーつきの減算
 	sbcs	REG_A, REG_A, r0, lsl #24
 	and	REG_A, REG_A, #0xFF << 24
 	mov	REG_NZ, REG_A, asr #24
-	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
-	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	adc	REG_P_REST, r1, r1
 	orrvs	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 	bicvc	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 .endm
@@ -1254,7 +1224,6 @@ opCC:	@ CPY $nnnn
 	@@ R0[7] => C, R0[6] => N
 	movs	r0, r0, lsl #25
 	orrcs	REG_NZ, REG_NZ, #0x80 << 24
-	biccc	REG_NZ, REG_NZ, #0x80 << 24
 	orrmi	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 	bicpl	REG_P_REST, REG_P_REST, #P_REST_V_FLAG
 .endm
@@ -1371,40 +1340,39 @@ op5E:	@ LSR $nnnn, X
 @@@ NZCを変更する
 @@@ 
 .macro	OP_ROL
-	and	r1, REG_P_REST, #P_REST_C_FLAG
-	orr	r0, r1, r0, lsl #1
-	movs	REG_NZ, r0, lsl #24
-	mov	r0, REG_NZ, lsr #24
-	mov	REG_NZ, REG_NZ, asr #24
-	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
-	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	@@ キャリーをセット
+	movs	r1, REG_P_REST, lsr #1
+	@@ シフト
+	adc	r0, r0, r0
+	@@ NZとキャリーをセット
+	orrs	REG_NZ, r0, r0, lsl #24
+	@@ キャリーを保存
+	adc	REG_P_REST, r1, r1
 .endm
 
 .macro	OP_ROL_A
-	and	r1, REG_P_REST, #P_REST_C_FLAG
-	orr	REG_A, REG_A, r1, lsl #23
+	@@ キャリーをセット
+	movs	r1, REG_P_REST, lsr #1
+	orrcs	REG_A, REG_A, #0x80 << 16
 	movs	REG_A, REG_A, lsl #1
 	mov	REG_NZ, REG_A, asr #24
-	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
-	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	adc	REG_P_REST, r1, r1
 .endm
 
 .macro	OP_ROR
-	mov	r1, REG_P_REST, lsl #31
-	orr	r0, r1, r0, lsl #23
-	movs	REG_NZ, r0, asr #24
-	and	r0, REG_NZ, #0xFF
-	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
-	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	movs	r1, REG_P_REST, lsr #1
+	orrcs	r0, r0, #0x100
+	movs	r0, r0, lsr #1
+	orr	REG_NZ, r0, r0, lsl #24
+	adc	REG_P_REST, r1, r1
 .endm
 
 .macro	OP_ROR_A
-	mov	r1, REG_P_REST, lsl #31
-	orr	REG_A, r1, REG_A, lsr #1
-	movs	REG_NZ, REG_A, asr #24
+	movs	r1, REG_P_REST, lsr #1
+	mov	REG_NZ, REG_A, rrx
+	movs	REG_NZ, REG_NZ, asr #24
 	mov	REG_A, REG_NZ, lsl #24
-	orrcs	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
-	biccc	REG_P_REST, REG_P_REST, #P_REST_C_FLAG
+	adc	REG_P_REST, r1, r1
 .endm
 
 op2A:	@ ROL A
@@ -2012,6 +1980,10 @@ init_cpu:
 @@@ 
 #ifdef CPU_TEST
 #include "cpu-test.S"
+#else
+	.globl	run_cpu_test
+run_cpu_test:	
+	mov	pc, lr
 #endif
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

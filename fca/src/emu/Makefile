@@ -31,6 +31,9 @@ clean:
 
 depend:
 	makedepend $(CPPFLAGS) $(SRC)
+
+cpu.o: cpu-test.S
+
 # DO NOT DELETE
 
 main.o: ../include/nes.h

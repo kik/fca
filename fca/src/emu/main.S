@@ -40,9 +40,7 @@ emulator_entry:
 	ldr	ip, =reg_save
 	stmia	ip, {r4-r14}
 
-#ifdef CPU_TEST
 	bl	run_cpu_test
-#endif
 	bl	init_emulator
 	bl	init_interrupt
 	bl	run_emulator

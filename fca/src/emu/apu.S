@@ -766,7 +766,7 @@ write_4015:
 	and	r1, r0, #0x02
 	str	r1, ch2_reg + SQ_ENB
 	and	r1, r0, #0x04
-	str	r1, ch3_reg + NZ_ENB
+	str	r1, ch3_reg + TR_ENB
 	and	r1, r0, #0x08
 	str	r1, ch4_reg + NZ_ENB
 
@@ -907,8 +907,13 @@ write_high_reg:
 	.globl	exit_apu
 leave_emu_sound:	
 exit_apu:	
+	mov	r1, #GBA_REG_BASE
+	mov	r0, #0
+	str	r0, [r1, #GBA_TIMERn_DATA(0)]
+	str	r0, [r1, #GBA_SGCNT1]
 	mov	pc, lr
 
 	.globl	enter_emu_sound
 enter_emu_sound:	
+	b	init_apu
 	mov	pc, lr

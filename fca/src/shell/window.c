@@ -142,8 +142,8 @@ run_window(struct window *wn, int *param)
   press &= key;
   prev_key = key;
 
-  if (repeat_counter(0, key & GBA_KEY_A))     press |= GBA_KEY_A;
-  if (repeat_counter(1, key & GBA_KEY_B))     press |= GBA_KEY_B;
+  //if (repeat_counter(0, key & GBA_KEY_A))     press |= GBA_KEY_A;
+  //if (repeat_counter(1, key & GBA_KEY_B))     press |= GBA_KEY_B;
   if (repeat_counter(2, key & GBA_KEY_RIGHT)) press |= GBA_KEY_RIGHT;
   if (repeat_counter(3, key & GBA_KEY_LEFT))  press |= GBA_KEY_LEFT;
   if (repeat_counter(4, key & GBA_KEY_UP))    press |= GBA_KEY_UP;
@@ -428,7 +428,7 @@ select_file(void *(*get_file)(int n, struct file *f))
 
   for (n = 0; get_file(n, 0); n++)
     ;
-  push_menu_window(&menu, 0, 2, 30, n, 8);
+  push_menu_window(&menu, 0, 2, 30, n, 7);
   menu.draw_item = select_file_draw_item;
   select_file_get_file = get_file;
 

@@ -179,24 +179,20 @@ update_square:
 #define TR_REG		0x00
 #define TR_ENB		0x04
 #define TR_LEN		0x08
-#define TR_FREQ		0x0C
-#define TR_REG_SZ	0x10
-
+#define TR_LINEAR_LEN	0x0C
+#define TR_FREQ		0x10
+#define TR_REG_SZ	0x14
+	
 #define TR_REG_HOLD_NOTE	0x80
 
 update_triangle:	
-#if 0
-	ldr	r2, =1942
-	mov	pc, lr
-#endif
 	mov	r1, #0
 	mov	r2, #0
 
-#if 0
 	ldr	r3, [r0, #TR_ENB]
 	teq	r3, #0
 	moveq	pc, lr
-
+#if 0
 	ldr	r4, [r0, #TR_LEN]
 	teq	r4, #0
 	moveq	pc, lr
@@ -207,7 +203,12 @@ update_triangle:
 	@@ lengthカウンタを更新
 	subeq	r4, r4, #1
 	streq	r4, [r0, #TR_LEN]
-#endif
+
+	ldr	r4, [r0, #TR_LINEAR_LEN]
+	subs	r4, r4, #1
+	strpl	r4, [r0, #TR_LINEAR_LEN]
+	moveq	pc, lr
+#endif	
 	ldr	r5, [r0, #TR_FREQ]
 	ldr	r4, = freq_table
 	mov	r5, r5, lsl #1
@@ -215,6 +216,104 @@ update_triangle:
 
 	mov	pc, lr
 
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@
+@@@ ノイズ
+@@@
+@@@	
+@@@  ノイズの波長の変換 (* 12B * 2) = (* 256H)
+@@@
+@@@  * 4M / 1.7M * 2
+@@@ = 4.AE
+@@@   2 →   9 → 04 << 1
+@@@   4 →  12 → 08 << 1
+@@@   8 →  25 → 10 << 1
+@@@  10 →  4A → 28 << 1
+@@@  20 →  95 → 28 << 2
+@@@  40 → 12B → 28 << 3
+@@@  50 → 176 → 30 << 3
+@@@  65 → 1D8 → 38 << 3
+@@@  7F → 252 → 28 << 4
+@@@  BE → 379 → 38 << 4
+@@@  FE → 4A4 → 28 << 5
+@@@ 17D → 6F6 → 38 << 5
+@@@ 1FC → 949 → 28 << 6
+@@@ 3F9 →1297 → 28 << 7
+@@@ 7F2 →252E → 28 << 8
+@@@      0  1  2  3  4  5  6  7
+@@@     04 08 10 18 20 28 30 38
+
+#define NZ_REG		0x00
+#define NZ_ENB		0x04
+#define NZ_LEN		0x08
+#define NZ_FREQ		0x0C
+#define NZ_VOL		0x10
+#define NZ_OUT		0x14
+#define NZ_ENV_COUNT	0x18
+#define NZ_ENV_LOAD	0x1C
+#define NZ_ENV_VOL	0x20
+#define NZ_REG_SZ	0x24
+
+#define NZ_REG_HOLD_NOTE 0x20
+#define NZ_REG_FIXED_ENV 0x10
+#define NZ_REG_NOISE_SHORT 0x800000
+		
+noise_table:
+	.byte	0x00, 0x01, 0x02, 0x05
+	.byte	0x15, 0x25, 0x35, 0x36
+	.byte	0x37, 0x45, 0x47, 0x55
+	.byte	0x57, 0x65, 0x75, 0x85
+
+update_noise:	
+	mov	r1, #0
+	mov	r2, #0
+
+#if 1
+	ldr	r3, [r0, #NZ_ENB]
+	teq	r3, #0
+	moveq	pc, lr
+
+	ldr	r4, [r0, #NZ_LEN]
+	teq	r4, #0
+	moveq	pc, lr
+
+	ldr	r3, [r0, #NZ_REG]
+	tst	r3, #NZ_REG_HOLD_NOTE
+	subeq	r4, r4, #1
+	streq	r4, [r0, #NZ_LEN]
+#endif
+	@@ エンベロープを更新
+	ldr	r4, [r0, #NZ_ENV_COUNT]
+	subs	r4, r4, #1
+	ldrmi	r4, [r0, #NZ_ENV_LOAD]
+	str	r4, [r0, #NZ_ENV_COUNT]
+	bpl	2f
+	@@ カウンタがエクスパイアしたのでボリュームを更新
+	ldr	r4, [r0, #NZ_ENV_VOL]
+	tst	r3, #NZ_REG_HOLD_NOTE
+	teqeq	r4, #0
+	@@ (Hold note が真) または (ボリュームが 0 でない)場合減らす
+	@@ (Hold note が偽) かつ (ボリュームが 0) の場合は減らさない
+	subne	r4, r4, #1	
+	and	r4, r4, #0xF
+	@@ 変化があった場合だけ保存
+	strne	r4, [r0, #NZ_ENV_VOL]
+2:	
+	ldr	r2, [r0, #NZ_FREQ]
+	tst	r3, #NZ_REG_NOISE_SHORT
+	orrne	r2, r2, #0x08
+	
+	tst	r3, #NZ_REG_FIXED_ENV
+	ldrne	r1, [r0, #NZ_VOL]
+	ldreq	r1, [r0, #NZ_ENV_VOL]
+	ldr	r4, [r0, #NZ_OUT]
+	teq	r4, r1
+	orrne	r2, r2, #0x8000
+	str	r1, [r0, #NZ_OUT]	
+
+	mov	pc, lr
+				
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@
@@ -270,6 +369,16 @@ do_ch3:
 	orreq	r2, r2, #0x8000
 	str	r2, [r0, #GBA_SG31]
 #endif
+do_ch4:
+	adr	r0, ch4_reg
+	bl	update_noise
+	mov	r0, #GBA_REG_BASE
+	mov	r1, r1, lsl #12
+	strh	r1, [r0, #GBA_SG40]
+	ldr	r1, [r0, #GBA_SGCNT1]
+	tst	r1, #8
+	orreq	r2, r2, #0x8000
+	strh	r2, [r0, #GBA_SG41]
 	ldmfd	sp!, {r4, r5, pc}
 
 	.pool
@@ -361,6 +470,7 @@ dmc_clocks:
 ch1_reg:	.fill	SQ_REG_SZ, 1, 0
 ch2_reg:	.fill	SQ_REG_SZ, 1, 0
 ch3_reg:	.fill	TR_REG_SZ, 1, 0
+ch4_reg:	.fill	NZ_REG_SZ, 1, 0
 ch5_reg:	.fill	DMC_REG_SZ, 1, 0
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -488,6 +598,12 @@ write_4007:
 	.globl	write_4008
 write_4008:	
 	strb	r0, ch3_reg + TR_REG + 0
+	ldr	r1, ch3_reg + TR_LEN
+	teq	r1, #0
+	moveq	pc, lr
+
+	and	r0, r0, #0x7F
+	str	r0, ch3_reg + TR_LINEAR_LEN
 	mov	pc, lr
 
 	.globl	write_4009
@@ -546,15 +662,35 @@ ch3_regs:	.fill	4, 1, 0
 
 	.globl	write_400C
 write_400C:	
-
+	strb	r0, ch4_reg + NZ_REG
+	and	r1, r0, #0xF
+	str	r1, ch4_reg + NZ_ENV_LOAD
+	str	r1, ch4_reg + NZ_VOL
+	mov	pc, lr
+	
 	.globl	write_400D
 write_400D:	
-
+	strb	r0, ch4_reg + NZ_REG + 1
+	mov	pc, lr
+	
 	.globl	write_400E
-write_400E:	
+write_400E:
+	strb	r0, ch4_reg + NZ_REG + 2
+	and	r1, r0, #0xF
+	adrl	r2, noise_table
+	ldrb	r1, [r2, r1]
+	str	r1, ch4_reg + NZ_FREQ
+	mov	pc, lr
 
 	.globl	write_400F
-write_400F:	
+write_400F:
+	strb	r0, ch4_reg + NZ_REG + 3
+	adr	r2, length_table
+	ldrb	r0, [r2, r0, lsr #3]
+	mov	r0, r0, lsl #2
+	str	r0, ch4_reg + NZ_LEN
+	mov	r0, #0xF
+	str	r0, ch4_reg + NZ_ENV_VOL
 	mov	pc, lr
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -629,6 +765,10 @@ write_4015:
 	str	r1, ch1_reg + SQ_ENB
 	and	r1, r0, #0x02
 	str	r1, ch2_reg + SQ_ENB
+	and	r1, r0, #0x04
+	str	r1, ch3_reg + NZ_ENB
+	and	r1, r0, #0x08
+	str	r1, ch4_reg + NZ_ENB
 
 #if 1
 	mov	r2, #0

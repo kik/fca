@@ -160,10 +160,12 @@ int_handler:
 	ldr	r1, [r0, #GBA_IE]
 	str	r1, [r0, #GBA_IE]
 
+#if 0
 	ldr	r2, [r0, #GBA_KEY]
 	tst	r2, #GBA_KEY_R | GBA_KEY_L
 	beq	emu_panic_from_int
-
+#endif
+	
 	mov	r1, r1, lsr #16
 	stmfd	sp!, {r1, lr}
 

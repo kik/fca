@@ -83,6 +83,29 @@ select_save_file(char *name, char *ext, struct file *f)
   return open_save_file(i, f);
 }
 
+#ifdef KOMASAI
+static void *
+komasai_select_save_file(char *name, char *ext, struct file *f)
+{
+  int i;
+  struct file ff;
+
+  for (i = 0; i < MAX_SAVE_FILE; i++) {
+    if (open_save_file(i, &ff) && namecmp(&ff, name) && extcmp(&ff, ext)) {
+      *f = ff;
+      return f->start;
+    }
+  }
+  for (i = 0; i < MAX_SAVE_FILE; i++) {
+    if (!open_save_file(i, &ff)) {
+      write_save_file(name, ext, i);
+      return open_save_file(i, f);
+    }
+  }
+  return 0;
+}
+#endif
+
 static void
 load_file()
 {
@@ -96,6 +119,7 @@ load_file()
     p = nes_file(i, &f);
 
     loaded_file = f;
+#ifndef KOMASAI
     if (nes_has_save_ram(p)) {
       struct file s;
       if (select_save_file(f.name, "sav", &s))
@@ -106,8 +130,19 @@ load_file()
 	run_emulator(p, 0, 0);
       }
     } else {
+    {
       run_emulator(p, 0, 0);
     }
+#else
+#if 1
+    if (nes_has_save_ram(p)) {
+      struct file s;
+      if (komasai_select_save_file(f.name, "sav", &s))
+	run_emulator(p, &s, &s);
+    } else
+#endif
+      run_emulator(p, 0, 0);
+#endif
     init_font();
   }
 }
@@ -149,8 +184,23 @@ draw_main_menu(struct menu_window *menu, int n, int x, int y)
 }
 
 static void
+draw_version(struct window *wn)
+{
+  printfxy(wn->x + 1, wn->y + 1, "ファミコンアドバンス KOMASAI ヴァージョン");
+}
+
+static void
 main_menu()
 {
+#ifdef KOMASAI
+  struct window win;
+
+  push_window(&win, 0, 17, 30, 3);
+  win.draw = draw_version;
+
+  while (run_window(&win, 0))
+    load_file();
+#else
   struct menu_window menu;
 
   for (;;) {
@@ -173,6 +223,7 @@ main_menu()
       break;
     }
   }
+#endif
 }
 
 static void
@@ -191,6 +242,10 @@ query_format()
 int
 start_shell(void)
 {
+#if 0
+  int i, j;
+  struct file f;
+#endif
   writeh(0x204, 0x4004);
 
   init_file_system();
@@ -200,6 +255,16 @@ start_shell(void)
   if (init_save_file_system() < 0)
     query_format();
 
+#if 0
+  i = j = 0;
+  while (nes_file(i, &f)) {
+    if (nes_has_save_ram(f.start)) {
+      write_save_file(f.name, "sav", j);
+      j++;
+    }
+    i++;
+  }
+#endif
   while (1)
     main_menu();
 }
@@ -207,7 +272,9 @@ start_shell(void)
 
 static char *L_menu_text[] = {
   "リセット",
+#ifndef KOMASAI
   "ほぞん",
+#endif
   "しゅうりょう",
 };
 
@@ -229,7 +296,11 @@ L_button_menu(struct L_menu *p)
   for (;;) {
     int n;
 
+#ifdef KOMASAI
+    push_menu_window(&menu, 2, 2, 9, 2, 2);
+#else
     push_menu_window(&menu, 2, 2, 9, 3, 3);
+#endif
 
     menu.draw_item = draw_L_menu;
     while (run_menu_window(&menu, &n))
@@ -242,6 +313,7 @@ L_button_menu(struct L_menu *p)
       p->reset = 1;
       goto end;
     case 1:
+#ifndef KOMASAI
       if (nes_has_save_ram(loaded_file.start)) {
 	struct file f;
 	
@@ -252,6 +324,7 @@ L_button_menu(struct L_menu *p)
       }
       break;
     case 2:
+#endif
       p->exit = 1;
       goto end;
     case -1:

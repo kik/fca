@@ -17,7 +17,7 @@ MAPPER = mapper0.bin mapper1.bin mapper2.bin mapper3.bin mapper4.bin
 all: shell.gba
 
 font: subdir
-	./tool/selfont <data/font.dat.src >data/font.dat
+	#./tool/selfont <data/font.dat.src >data/font.dat
 
 shell.elf: subdir
 	$(LD) -o $@ $(OBJ) -T shell.lds -Map shell.map

@@ -9,7 +9,7 @@ OBJCOPY = $(CROSS_COMPILE)objcopy
 HOSTCC = gcc
 
 CFLAGS = -I../include -ffreestanding -O2 -Wall
-CPPFLAGS = -I../include
+CPPFLAGS = -I../include -DKOMASAI
 
 OBJ = crt0.o shell.o lib.o file.o load.o text.o window.o
 SRC = crt0.S shell.c lib.c file.c load.c text.c window.c

@@ -98,6 +98,52 @@
 @@@ r0		=> 書くバイト(write)
 @@@ r0		<= 読んだバイト(read)・書いたバイト(write)
 @@@ 
+
+@@@ 
+@@@ 3種類の命令がある
+@@@ 
+@@@ 一番多いのが
+@@@ 16ビットアドレスから8ビットロードするだけの命令
+@@@ 次に多いのが
+@@@ ロード，計算，ストアをする命令
+@@@ 残りは
+@@@ ストアするだけの命令
+
+@@@ 
+@@@ 16ビットアドレスからロードのみ
+@@@ 
+@@@ RAMからのロードが一番多いので優先する
+@@@ 
+@@@ READ_1
+@@@ OP
+@@@ READ_2
+@@@ OP
+@@@ 
+@@@ のように使う
+
+.macro	READ_1
+	movs	r1, REG_ADDR, lsr #13
+	adr	lr, 9999f
+	@@ 0でない時はジャンプする。
+	@@ ちょっと工夫して1クロック減らす
+	ldrne	pc, [lr, -r1, lsl #2]
+	@@ RAMからロード
+	bic	r0, REG_ADDR, #0x1800
+	add	r0, r0, #NES_RAM
+	ldrb	r0, [r0, REG_OP_TABLE]
+.endm
+
+.macro	READ_2
+	.long	read_rom_byte
+	.long	read_rom_byte
+	.long	read_rom_byte
+	.long	read_rom_byte
+	.long	read_save_ram
+	.long	read_high_reg
+	.long	read_ppu_reg
+9999:	
+.endm
+
 .macro	READ
 	mov	r1, REG_ADDR, lsr #13
 	adr	lr, 1f
@@ -120,38 +166,49 @@
 .endm
 
 @@@ 
-@@@ 直後に同じアドレスに書く場合(r3にアドレスを残すので壊してはいけない)
+@@@ 読んだあと書く場合
 @@@ 
-.macro	READ_W
-	mov	r1, REG_ADDR, lsr #13
-	adr	lr, 1f
-	ldr	pc, [pc, r1, lsl #2]
-	nop
-	.long	2f		@ fast path
-	.long	read_ppu_reg
-	.long	read_high_reg
-	.long	read_save_ram
-	.long	read_rom_byte
-	.long	read_rom_byte
-	.long	read_rom_byte
-	.long	read_rom_byte
-2:
-	bic	r3, REG_ADDR, #0x1800
-	add	r3, r3, #NES_RAM
-	ldrb	r0, [r3, REG_OP_TABLE]!
-	@@ というわけでジャンプする必要はない
-1:	
+@@@ READ_WRITE_1
+@@@ OP
+@@@ READ_WRITE_2
+@@@ 
+@@@ READ_WRITE_3
+@@@ OP
+@@@ READ_WRITE_4
+@@@ のように使う
+@@@ OPではr3を保存しなければならない
+
+.macro	READ_WRITE_1
+	movs	r3, REG_ADDR, lsr #13
+	adr	lr, 9999f
+	@@ 0でない時はジャンプする。
+	@@ ちょっと工夫して1クロック減らす
+	ldrne	pc, [lr, -r1, lsl #2]
+	@@ RAMからロード
+	bic	REG_ADDR, REG_ADDR, #0x1800
+	add	REG_ADDR, REG_ADDR, #NES_RAM
+	ldrb	r0, [REG_ADDR, REG_OP_TABLE]!
 .endm
 
-@@@ 
-@@@ 通常の書き込み(STA,STXなど)(REG_ADDRを壊すので注意)
-@@@ 
-.macro	WRITE
-	mov	r1, REG_ADDR, lsr #13
+.macro	READ_WRITE_2
+	strb	r0, [REG_ADDR]
+.endm
+
+.macro	READ_WRITE_3
+	.long	read_rom_byte
+	.long	read_rom_byte
+	.long	read_rom_byte
+	.long	read_rom_byte
+	.long	read_save_ram
+	.long	read_high_reg
+	.long	read_ppu_reg
+9999:	
+.endm
+
+.macro	READ_WRITE_4
 	adr	lr, 1f
-	ldr	pc, [pc, r1, lsl #2]
+	ldr	pc, [pc, r3, lsl #2]
 	nop
-	.long	2f		@ fast path
 	.long	write_ppu_reg
 	.long	write_high_reg
 	.long	write_save_ram
@@ -159,34 +216,36 @@
 	.long	write_rom_byte
 	.long	write_rom_byte
 	.long	write_rom_byte
-2:
+1:	
+.endm
+
+@@@ 
+@@@ 書き込みだけの場合
+@@@ 
+@@@ WRITE_1
+@@@ TAIL
+@@@ WRITE_2
+@@@ TAIL
+@@@ とする
+
+.macro	WRITE_1
+	movs	r1, REG_ADDR, lsr #13
+	adr	lr, 9999f
+	ldrne	pc, [lr, -r1, lsl #2]
 	bic	REG_ADDR, REG_ADDR, #0x1800
 	add	REG_ADDR, REG_ADDR, #NES_RAM
 	strb	r0, [REG_ADDR, REG_OP_TABLE]
-	@@ というわけでジャンプする必要はない
-1:	
 .endm
 
-@@@ 
-@@@ READ_W で読んだ後の書き込み(INC, LSRなど)
-@@@ 
-.macro	WRITE_W
-	mov	r1, REG_ADDR, lsr #13
-	adr	lr, 1f
-	ldr	pc, [pc, r1, lsl #2]
-	nop
-	.long	2f		@ fast path
-	.long	write_ppu_reg
-	.long	write_high_reg
+.macro	WRITE_2
+	.long	write_rom_byte
+	.long	write_rom_byte
+	.long	write_rom_byte
+	.long	write_rom_byte
 	.long	write_save_ram
-	.long	write_rom_byte
-	.long	write_rom_byte
-	.long	write_rom_byte
-	.long	write_rom_byte
-2:
-	strb	r0, [r3]
-	@@ というわけでジャンプする必要はない
-1:	
+	.long	write_high_reg
+	.long	write_ppu_reg
+9999:	
 .endm
 
 @@@ 
@@ -593,25 +652,29 @@ opB5:	@ LDA $nn, X
 	CYCLE_NEXT	4
 
 opAD:	@ LDA $nnnn
-	ABS_ADDR; READ; OP_LDA
-	CYCLE_NEXT	4
+	ABS_ADDR
+	READ_1;	OP_LDA;	CYCLE_NEXT	4
+	READ_2;	OP_LDA;	CYCLE_NEXT	4
 
 opBD:	@ LDA $nnnn, X
-	ABSX_ADDR; READ; OP_LDA
-	CYCLE_NEXT	4
+	ABSX_ADDR
+	READ_1;	OP_LDA;	CYCLE_NEXT	4
+	READ_2;	OP_LDA;	CYCLE_NEXT	4
 
 opB9:	@ LDA $nnnn, Y
-	ABSY_ADDR; READ; OP_LDA
-	CYCLE_NEXT	4
+	ABSY_ADDR
+	READ_1;	OP_LDA;	CYCLE_NEXT	4
+	READ_2;	OP_LDA;	CYCLE_NEXT	4
 
 opA1:	@ LDA ($nn, X)
-	INDX_ADDR; READ; OP_LDA
-	CYCLE_NEXT	6
+	INDX_ADDR
+	READ_1;	OP_LDA;	CYCLE_NEXT	6
+	READ_2;	OP_LDA;	CYCLE_NEXT	6
 
 opB1:	@ LDA ($nn), Y
-	INDY_ADDR; READ; OP_LDA
-	CYCLE_NEXT	5
-
+	INDY_ADDR
+	READ_1;	OP_LDA;	CYCLE_NEXT	5
+	READ_2;	OP_LDA;	CYCLE_NEXT	5
 
 
 opA2:	@ LDX #$nn
@@ -627,12 +690,14 @@ opB6:	@ LDX $nn, Y
 	CYCLE_NEXT	4
 
 opAE:	@ LDX $nnnn
-	ABS_ADDR; READ; OP_LDX
-	CYCLE_NEXT	4
+	ABS_ADDR
+	READ_1;	OP_LDX;	CYCLE_NEXT	4
+	READ_2;	OP_LDX;	CYCLE_NEXT	4
 
 opBE:	@ LDX $nnnn, Y
-	ABSY_ADDR; READ; OP_LDX
-	CYCLE_NEXT	4
+	ABSY_ADDR
+	READ_1;	OP_LDX;	CYCLE_NEXT	4
+	READ_2;	OP_LDX;	CYCLE_NEXT	4
 
 
 
@@ -649,12 +714,14 @@ opB4:	@ LDY $nn, X
 	CYCLE_NEXT	4
 
 opAC:	@ LDY $nnnn
-	ABS_ADDR; READ; OP_LDY
-	CYCLE_NEXT	4
+	ABS_ADDR
+	READ_1;	OP_LDY;	CYCLE_NEXT	4
+	READ_2;	OP_LDY;	CYCLE_NEXT	4
 
 opBC:	@ LDY $nnnn, X
-	ABSX_ADDR; READ; OP_LDY
-	CYCLE_NEXT	4
+	ABSX_ADDR
+	READ_1;	OP_LDY;	CYCLE_NEXT	4
+	READ_2;	OP_LDY;	CYCLE_NEXT	4
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -682,29 +749,28 @@ op95:	@ STA $nn, X
 
 op8D:	@ STA $nnnn
 	ABS_ADDR; OP_STA
-	WRITE
-	CYCLE_NEXT	4
+	WRITE_1; CYCLE_NEXT 4
+	WRITE_2; CYCLE_NEXT 4
 
 op9D:	@ STA $nnnn, X
 	ABSX_ADDR; OP_STA
-	WRITE
-	CYCLE_NEXT	5
+	WRITE_1; CYCLE_NEXT 5
+	WRITE_2; CYCLE_NEXT 5
 
 op99:	@ STA $nnnn, Y
 	ABSY_ADDR; OP_STA
-	WRITE
-	CYCLE_NEXT	5
+	WRITE_1; CYCLE_NEXT 5
+	WRITE_2; CYCLE_NEXT 5
 
 op81:	@ STA ($nn, X)
-	INDX_ADDR; OP_STA
-	WRITE
-	CYCLE_NEXT	6
+	INDX_ADDR
+	WRITE_1; CYCLE_NEXT 6
+	WRITE_2; CYCLE_NEXT 6
 
 op91:	@ STA ($nn), Y
 	INDY_ADDR; OP_STA
-	WRITE
-	CYCLE_NEXT	6
-
+	WRITE_1; CYCLE_NEXT 6
+	WRITE_2; CYCLE_NEXT 6
 
 
 op86:	@ STX $nn
@@ -720,9 +786,8 @@ op96:	@ STX $nn, Y
 op8E:	@ STX $nnnn
 	ABS_ADDR
 	mov	r0, REG_X
-	WRITE
-	CYCLE_NEXT	4
-
+	WRITE_1; CYCLE_NEXT 4
+	WRITE_2; CYCLE_NEXT 4
 
 
 op84:	@ STY $nn
@@ -738,8 +803,8 @@ op94:	@ STY $nn, X
 op8C:	@ STY $nnnn
 	ABS_ADDR
 	mov	r0, REG_Y
-	WRITE
-	CYCLE_NEXT	4
+	WRITE_1; CYCLE_NEXT 4
+	WRITE_2; CYCLE_NEXT 4
 
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -797,14 +862,14 @@ opF6:	@ INC $nn, X
 	CYCLE_NEXT	6
 
 opEE:	@ INC $nnnn
-	ABS_ADDR; READ_W; OP_INC
-	WRITE_W
-	CYCLE_NEXT	6
+	ABS_ADDR
+	READ_WRITE_1; OP_INC; READ_WRITE_2; CYCLE_NEXT	6
+	READ_WRITE_3; OP_INC; READ_WRITE_4; CYCLE_NEXT	6
 
 opFE:	@ INC $nnnn, X
-	ABSX_ADDR; READ_W; OP_INC
-	WRITE_W
-	CYCLE_NEXT	7
+	ABSX_ADDR
+	READ_WRITE_1; OP_INC; READ_WRITE_2; CYCLE_NEXT	7
+	READ_WRITE_3; OP_INC; READ_WRITE_4; CYCLE_NEXT	7
 
 opE8:	@ INX
 	IMPLIED
@@ -827,14 +892,14 @@ opD6:	@ DEC $nn, X
 	CYCLE_NEXT	6
 
 opCE:	@ DEC $nnnn
-	ABS_ADDR; READ_W; OP_DEC
-	WRITE_W
-	CYCLE_NEXT	6
+	ABS_ADDR
+	READ_WRITE_1; OP_DEC; READ_WRITE_2; CYCLE_NEXT	6
+	READ_WRITE_3; OP_DEC; READ_WRITE_4; CYCLE_NEXT	6
 
 opDE:	@ DEC $nnnn, X
-	ABSX_ADDR; READ_W; OP_DEC
-	WRITE_W
-	CYCLE_NEXT	7
+	ABSX_ADDR
+	READ_WRITE_1; OP_DEC; READ_WRITE_2; CYCLE_NEXT	7
+	READ_WRITE_3; OP_DEC; READ_WRITE_4; CYCLE_NEXT	7
 
 opCA:	@ DEX
 	IMPLIED
@@ -891,24 +956,29 @@ op75:	@ ADC $nn, X
 	CYCLE_NEXT	4
 
 op6D:	@ ADC $nnnn
-	ABS_ADDR; READ; OP_ADC
-	CYCLE_NEXT	4
+	ABS_ADDR
+	READ_1;	OP_ADC;	CYCLE_NEXT	4
+	READ_2;	OP_ADC;	CYCLE_NEXT	4
 
 op7D:	@ ADC $nnnn, X
-	ABSX_ADDR; READ; OP_ADC
-	CYCLE_NEXT	4
+	ABSX_ADDR
+	READ_1;	OP_ADC;	CYCLE_NEXT	4
+	READ_2;	OP_ADC;	CYCLE_NEXT	4
 
 op79:	@ ADC $nnnn, Y
-	ABSY_ADDR; READ; OP_ADC
-	CYCLE_NEXT	4
+	ABSY_ADDR
+	READ_1;	OP_ADC;	CYCLE_NEXT	4
+	READ_2;	OP_ADC;	CYCLE_NEXT	4
 
 op61:	@ ADC ($nn, X)
-	INDX_ADDR; READ; OP_ADC
-	CYCLE_NEXT	6
+	INDX_ADDR
+	READ_1;	OP_ADC;	CYCLE_NEXT	6
+	READ_2;	OP_ADC;	CYCLE_NEXT	6
 
 op71:	@ ADC ($nn), Y
-	INDY_ADDR; READ; OP_ADC
-	CYCLE_NEXT	5
+	INDY_ADDR
+	READ_1;	OP_ADC;	CYCLE_NEXT	5
+	READ_2;	OP_ADC;	CYCLE_NEXT	5
 
 
 opE9:	@ SBC #$nn
@@ -924,24 +994,29 @@ opF5:	@ SBC $nn, X
 	CYCLE_NEXT	4
 
 opED:	@ SBC $nnnn
-	ABS_ADDR; READ; OP_SBC
-	CYCLE_NEXT	4
+	ABS_ADDR
+	READ_1;	OP_SBC;	CYCLE_NEXT	4
+	READ_2;	OP_SBC;	CYCLE_NEXT	4
 
 opFD:	@ SBC $nnnn, X
-	ABSX_ADDR; READ; OP_SBC
-	CYCLE_NEXT	4
+	ABSX_ADDR
+	READ_1;	OP_SBC;	CYCLE_NEXT	4
+	READ_2;	OP_SBC;	CYCLE_NEXT	4
 
 opF9:	@ SBC $nnnn, Y
-	ABSY_ADDR; READ; OP_SBC
-	CYCLE_NEXT	4
+	ABSY_ADDR
+	READ_1;	OP_SBC;	CYCLE_NEXT	4
+	READ_2;	OP_SBC;	CYCLE_NEXT	4
 
 opE1:	@ SBC ($nn, X)
-	INDX_ADDR; READ; OP_SBC
-	CYCLE_NEXT	6
+	INDX_ADDR
+	READ_1;	OP_SBC;	CYCLE_NEXT	6
+	READ_2;	OP_SBC;	CYCLE_NEXT	6
 
 opF1:	@ SBC ($nn), Y
-	INDY_ADDR; READ; OP_SBC
-	CYCLE_NEXT	5
+	INDY_ADDR
+	READ_1;	OP_SBC;	CYCLE_NEXT	5
+	READ_2;	OP_SBC;	CYCLE_NEXT	5
 
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -988,25 +1063,29 @@ op35:	@ AND $nn, X
 	CYCLE_NEXT	4
 
 op2D:	@ AND $nnnn
-	ABS_ADDR; READ; OP_AND
-	CYCLE_NEXT	4
+	ABS_ADDR
+	READ_1;	OP_AND;	CYCLE_NEXT	4
+	READ_2;	OP_AND;	CYCLE_NEXT	4
 
 op3D:	@ AND $nnnn, X
-	ABSX_ADDR; READ; OP_AND
-	CYCLE_NEXT	4
+	ABSX_ADDR
+	READ_1;	OP_AND;	CYCLE_NEXT	4
+	READ_2;	OP_AND;	CYCLE_NEXT	4
 
 op39:	@ AND $nnnn, Y
-	ABSY_ADDR; READ; OP_AND
-	CYCLE_NEXT	4
+	ABSY_ADDR
+	READ_1;	OP_AND;	CYCLE_NEXT	4
+	READ_2;	OP_AND;	CYCLE_NEXT	4
 
 op21:	@ AND ($nn, X)
-	INDX_ADDR; READ; OP_AND
-	CYCLE_NEXT	6
+	INDX_ADDR
+	READ_1;	OP_AND;	CYCLE_NEXT	6
+	READ_2;	OP_AND;	CYCLE_NEXT	6
 
 op31:	@ AND ($nn), Y
-	INDY_ADDR; READ; OP_AND
-	CYCLE_NEXT	5
-
+	INDY_ADDR
+	READ_1;	OP_AND;	CYCLE_NEXT	5
+	READ_2;	OP_AND;	CYCLE_NEXT	5
 
 
 op49:	@ EOR #$nn
@@ -1022,25 +1101,29 @@ op55:	@ EOR $nn, X
 	CYCLE_NEXT	4
 
 op4D:	@ EOR $nnnn
-	ABS_ADDR; READ; OP_EOR
-	CYCLE_NEXT	4
+	ABS_ADDR
+	READ_1;	OP_EOR;	CYCLE_NEXT	4
+	READ_2;	OP_EOR;	CYCLE_NEXT	4
 
 op5D:	@ EOR $nnnn, X
-	ABSX_ADDR; READ; OP_EOR
-	CYCLE_NEXT	4
+	ABSX_ADDR
+	READ_1;	OP_EOR;	CYCLE_NEXT	4
+	READ_2;	OP_EOR;	CYCLE_NEXT	4
 
 op59:	@ EOR $nnnn, Y
-	ABSY_ADDR; READ; OP_EOR
-	CYCLE_NEXT	4
+	ABSY_ADDR
+	READ_1;	OP_EOR;	CYCLE_NEXT	4
+	READ_2;	OP_EOR;	CYCLE_NEXT	4
 
 op41:	@ EOR ($nn, X)
-	INDX_ADDR; READ; OP_EOR
-	CYCLE_NEXT	6
+	INDX_ADDR
+	READ_1;	OP_EOR;	CYCLE_NEXT	6
+	READ_2;	OP_EOR;	CYCLE_NEXT	6
 
 op51:	@ EOR ($nn), Y
-	INDY_ADDR; READ; OP_EOR
-	CYCLE_NEXT	5
-
+	INDY_ADDR
+	READ_1;	OP_EOR;	CYCLE_NEXT	5
+	READ_2;	OP_EOR;	CYCLE_NEXT	5
 
 
 op09:	@ ORA #$nn
@@ -1056,24 +1139,29 @@ op15:	@ ORA $nn, X
 	CYCLE_NEXT	4
 
 op0D:	@ ORA $nnnn
-	ABS_ADDR; READ; OP_ORA
-	CYCLE_NEXT	4
+	ABS_ADDR
+	READ_1;	OP_ORA;	CYCLE_NEXT	4
+	READ_2;	OP_ORA;	CYCLE_NEXT	4
 
 op1D:	@ ORA $nnnn, X
-	ABSX_ADDR; READ; OP_ORA
-	CYCLE_NEXT	4
+	ABSX_ADDR
+	READ_1;	OP_ORA;	CYCLE_NEXT	4
+	READ_2;	OP_ORA;	CYCLE_NEXT	4
 
 op19:	@ ORA $nnnn, Y
-	ABSY_ADDR; READ; OP_ORA
-	CYCLE_NEXT	4
+	ABSY_ADDR
+	READ_1;	OP_ORA;	CYCLE_NEXT	4
+	READ_2;	OP_ORA;	CYCLE_NEXT	4
 
 op01:	@ ORA ($nn, X)
-	INDX_ADDR; READ; OP_ORA
-	CYCLE_NEXT	6
+	INDX_ADDR
+	READ_1;	OP_ORA;	CYCLE_NEXT	6
+	READ_2;	OP_ORA;	CYCLE_NEXT	6
 
 op11:	@ ORA ($nn), Y
-	INDY_ADDR; READ; OP_ORA
-	CYCLE_NEXT	5
+	INDY_ADDR
+	READ_1;	OP_ORA;	CYCLE_NEXT	5
+	READ_2;	OP_ORA;	CYCLE_NEXT	5
 
 
 
@@ -1119,24 +1207,30 @@ opD5:	@ CMP $nn, X
 	CYCLE_NEXT	4
 
 opCD:	@ CMP $nnnn
-	ABS_ADDR; READ; OP_CMP
+	ABS_ADDR
+	READ_1;	OP_CMP;	CYCLE_NEXT	4
+	READ_2;	OP_CMP;	CYCLE_NEXT	4
 	CYCLE_NEXT	4
 
 opDD:	@ CMP $nnnn, X
-	ABSX_ADDR; READ; OP_CMP
-	CYCLE_NEXT	4
+	ABSX_ADDR
+	READ_1;	OP_CMP;	CYCLE_NEXT	4
+	READ_2;	OP_CMP;	CYCLE_NEXT	4
 
 opD9:	@ CMP $nnnn, Y
-	ABSY_ADDR; READ; OP_CMP
-	CYCLE_NEXT	4
+	ABSY_ADDR
+	READ_1;	OP_CMP;	CYCLE_NEXT	4
+	READ_2;	OP_CMP;	CYCLE_NEXT	4
 
 opC1:	@ CMP ($nn, X)
-	INDX_ADDR; READ; OP_CMP
-	CYCLE_NEXT	6
+	INDX_ADDR
+	READ_1;	OP_CMP;	CYCLE_NEXT	6
+	READ_2;	OP_CMP;	CYCLE_NEXT	6
 
 opD1:	@ CMP ($nn), Y
-	INDY_ADDR; READ; OP_CMP
-	CYCLE_NEXT	5
+	INDY_ADDR
+	READ_1;	OP_CMP;	CYCLE_NEXT	5
+	READ_2;	OP_CMP;	CYCLE_NEXT	5
 
 
 opE0:	@ CPX #$nn
@@ -1148,9 +1242,9 @@ opE4:	@ CPX $nn
 	CYCLE_NEXT	3
 
 opEC:	@ CPX $nnnn
-	ABS_ADDR; READ; OP_CPX
-	CYCLE_NEXT	4
-
+	ABS_ADDR
+	READ_1;	OP_CPX;	CYCLE_NEXT	4
+	READ_2;	OP_CPX;	CYCLE_NEXT	4
 
 
 opC0:	@ CPY #$nn
@@ -1162,8 +1256,9 @@ opC4:	@ CPY $nn
 	CYCLE_NEXT	3
 
 opCC:	@ CPY $nnnn
-	ABS_ADDR; READ; OP_CPY
-	CYCLE_NEXT	4
+	ABS_ADDR
+	READ_1;	OP_CPY;	CYCLE_NEXT	4
+	READ_2;	OP_CPY;	CYCLE_NEXT	4
 
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1194,8 +1289,9 @@ op24:	@ BIT $nn
 	CYCLE_NEXT	3
 
 op2C:	@ BIT $nnnn
-	ABS_ADDR; READ; OP_BIT
-	CYCLE_NEXT	4
+	ABS_ADDR
+	READ_1;	OP_BIT;	CYCLE_NEXT	4
+	READ_2;	OP_BIT;	CYCLE_NEXT	4
 
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1245,15 +1341,14 @@ op16:	@ ASL $nn, X
 	CYCLE_NEXT	6
 
 op0E:	@ ASL $nnnn
-	ABS_ADDR; READ_W; OP_ASL
-	WRITE_W
-	CYCLE_NEXT	6
+	ABS_ADDR
+	READ_WRITE_1; OP_ASL; READ_WRITE_2; CYCLE_NEXT	6
+	READ_WRITE_3; OP_ASL; READ_WRITE_4; CYCLE_NEXT	6
 
 op1E:	@ ASL $nnnn, X
-	ABSX_ADDR; READ_W; OP_ASL
-	WRITE_W
-	CYCLE_NEXT	7
-
+	ABSX_ADDR
+	READ_WRITE_1; OP_ASL; READ_WRITE_2; CYCLE_NEXT	7
+	READ_WRITE_3; OP_ASL; READ_WRITE_4; CYCLE_NEXT	7
 
 
 op4A:	@ LSR A
@@ -1272,16 +1367,14 @@ op56:	@ LSR $nn, X
 	CYCLE_NEXT	6
 
 op4E:	@ LSR $nnnn
-	ABS_ADDR; READ_W; OP_LSR
-	WRITE_W
-	CYCLE_NEXT	6
+	ABS_ADDR
+	READ_WRITE_1; OP_LSR; READ_WRITE_2; CYCLE_NEXT	6
+	READ_WRITE_3; OP_LSR; READ_WRITE_4; CYCLE_NEXT	6
 
 op5E:	@ LSR $nnnn, X
-	ABSX_ADDR; READ_W; OP_LSR
-	WRITE_W
-	CYCLE_NEXT	7
-
-
+	ABSX_ADDR
+	READ_WRITE_1; OP_LSR; READ_WRITE_2; CYCLE_NEXT	7
+	READ_WRITE_3; OP_LSR; READ_WRITE_4; CYCLE_NEXT	7
 
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1348,14 +1441,14 @@ op36:	@ ROL $nn, X
 	CYCLE_NEXT	6
 
 op2E:	@ ROL $nnnn
-	ABS_ADDR; READ_W; OP_ROL
-	WRITE_W
-	CYCLE_NEXT	6
+	ABS_ADDR
+	READ_WRITE_1; OP_ROL; READ_WRITE_2; CYCLE_NEXT	6
+	READ_WRITE_3; OP_ROL; READ_WRITE_4; CYCLE_NEXT	6
 
 op3E:	@ ROL $nnnn, X
-	ABSX_ADDR; READ_W; OP_ROL
-	WRITE_W
-	CYCLE_NEXT	7
+	ABSX_ADDR
+	READ_WRITE_1; OP_ROL; READ_WRITE_2; CYCLE_NEXT	7
+	READ_WRITE_3; OP_ROL; READ_WRITE_4; CYCLE_NEXT	7
 
 
 op6A:	@ ROR A
@@ -1374,14 +1467,15 @@ op76:	@ ROR $nn, X
 	CYCLE_NEXT	6
 
 op6E:	@ ROR $nnnn
-	ABS_ADDR; READ_W; OP_ROR
-	WRITE_W
-	CYCLE_NEXT	6
+	ABS_ADDR
+	READ_WRITE_1; OP_ROR; READ_WRITE_2; CYCLE_NEXT	6
+	READ_WRITE_3; OP_ROR; READ_WRITE_4; CYCLE_NEXT	6
 
 op7E:	@ ROR $nnnn, X
-	ABSX_ADDR; READ_W; OP_ROR
-	WRITE_W
-	CYCLE_NEXT	7
+	ABSX_ADDR
+	READ_WRITE_1; OP_ROR; READ_WRITE_2; CYCLE_NEXT	7
+	READ_WRITE_3; OP_ROR; READ_WRITE_4; CYCLE_NEXT	7
+
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1390,60 +1484,67 @@ op7E:	@ ROR $nnnn, X
 @@@ 
 @@@ 分岐
 @@@ 
+
+.macro	BRANCH_EQ
+	ldreqsb	r0, [REG_PC], #1
+	movne	r0, #1
+	add	REG_PC, REG_PC, r0
+	subeq	REG_CYCLE, REG_CYCLE, #1
+.endm
+
+.macro	BRANCH_NE
+	ldrnesb	r0, [REG_PC], #1
+	moveq	r0, #1
+	add	REG_PC, REG_PC, r0
+	subne	REG_CYCLE, REG_CYCLE, #1
+.endm
+
 op90:	@ BCC $nn
-	IMM_VALUE
 	tst	REG_P, #ARM_C_FLAG
 	@@ Z が立てば
-	beq	relative_jump
+	BRANCH_EQ
 	CYCLE_NEXT	2
 
 opB0:	@ BCS $nn
-	IMM_VALUE
 	tst	REG_P, #ARM_C_FLAG
 	@@ Z が下りてれば
-	bne	relative_jump
+	BRANCH_NE
 	CYCLE_NEXT	2
 
 opD0:	@ BNE $nn
-	IMM_VALUE
 	tst	REG_P, #ARM_Z_FLAG
 	@@ 結果が0なら
-	beq	relative_jump
+	BRANCH_EQ
 	CYCLE_NEXT	2
 
 opF0:	@ BEQ $nn
-	IMM_VALUE
 	tst	REG_P, #ARM_Z_FLAG
 	@@ Z が下りてれば
-	bne	relative_jump
+	BRANCH_NE
 	CYCLE_NEXT	2
 
 op30:	@ BMI $nn
-	IMM_VALUE
 	tst	REG_P, #ARM_N_FLAG
 	@@ 結果が0でないなら
-	bne	relative_jump
+	BRANCH_NE
 	CYCLE_NEXT	2
 
 op10:	@ BPL $nn
-	IMM_VALUE
 	tst	REG_P, #ARM_N_FLAG
 	@@ 結果が0なら
-	beq	relative_jump
+	BRANCH_EQ
 	CYCLE_NEXT	2
 
 op50:	@ BVC $nn
-	IMM_VALUE
 	tst	REG_P_REST, #P_REST_V_FLAG
 	@@ 結果が0なら
-	beq	relative_jump
+	BRANCH_EQ
 	CYCLE_NEXT	2
 
 op70:	@ BVS $nn
-	IMM_VALUE
 	tst	REG_P_REST, #P_REST_V_FLAG
 	@@ 結果0でないなら
-	bne	relative_jump
+	BRANCH_NE
 	CYCLE_NEXT	2
 
 
@@ -1463,24 +1564,6 @@ pc_bank:	.long	0
 	add	REG_PC, r0, r1
 .endm
 
-@@@ 
-@@@ 相対ジャンプを行う
-@@@ 
-@@@ r0	=> オフセット
-@@@ 
-relative_jump:	
-#if 0
-	ldr	r1, pc_bank
-	@@ 真のPCを得る
-	sub	r1, REG_PC, r1
-	mov	r0, r0, lsl #24
-	@@ 符号拡張
-	add	r0, r1, r0, asr #24
-	LOAD_PC
-#endif
-	mov	r0, r0, lsl #24
-	add	REG_PC, REG_PC, r0, asr #24
-	CYCLE_NEXT	3
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

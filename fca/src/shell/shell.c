@@ -4,6 +4,7 @@
 #include "file.h"
 #include "load.h"
 #include "window.h"
+#include "vram.h"
 
 static void *
 nes_file(int nth, struct file *f)
@@ -30,6 +31,18 @@ save_file(int nth, struct file *f)
 {
   struct file ff;
   int n = 0;
+  int i;
+
+  for (i = 0; i < MAX_SAVE_FILE; i++) {
+    open_save_file(i, &ff);
+    if (extcmp(&ff, "sav")) {
+      if (n == nth) {
+	if (f) *f = ff;
+	return f->start;
+      }
+      n++;
+    }
+  }
 
   next_file(&ff, 0);
   do {
@@ -45,105 +58,71 @@ save_file(int nth, struct file *f)
   return 0;
 }
 
-static int
-count_nes_file()
+static void *
+save_file_writable(int n, struct file *f)
 {
-  int n;
-  
-  for (n = 0; nes_file(n, 0); n++)
-    ;
-  return n;
+  return open_save_file(n, f);
 }
 
-static int
-count_save_file()
+static void *
+select_save_file(char *name, char *ext, struct file *f)
 {
-  int n;
+  int i;
 
-  for (n = 0; save_file(n, 0); n++)
-    ;
-  return n;
-}
+  i = select_file(save_file_writable);
+  if (i < 0)
+    return 0;
 
-static void
-draw_nes_file(struct menu_window *menu, int n, int x, int y)
-{
-  struct file f;
+  if (!write_save_file(name, ext, i))
+    return 0;
 
-  if (nes_file(n, &f))
-    printfxy(x, y, "%s.%s", f.name, f.ext);
-}
-
-static void
-draw_save_file(struct menu_window *menu, int n, int x, int y)
-{
-  struct file f;
-
-  if (save_file(n, &f))
-    printfxy(x, y, "%s.%s", f.name, f.ext);
+  return open_save_file(i, f);
 }
 
 static void
 load_file()
 {
-  int n;
-  struct menu_window menu;
   int i;
 
-  n = count_nes_file();
-  if (!n)
-    return;
-
-  push_menu_window(&menu, 0, 2, 30, n, 8);
-  menu.draw_item = draw_nes_file;
-
-  while (run_menu_window(&menu, &i))
-    ;
-  
-  pop_window(&menu.wn);
+  i = select_file(nes_file);
 
   if (i >= 0) {
     struct file f;
-    void *p;
-    nes_file(i, &f);
-    load_emulator(f.start);
-    load_mapper(f.start);
-    enter_emulator(f.start);
+    struct nes_header *p;
+    p = nes_file(i, &f);
+
+    if (nes_has_save_ram(p)) {
+      struct file s;
+      if (select_save_file(f.name, "sav", &s))
+	run_emulator(p, &s, 0);
+      else
+	run_emulator(p, 0, 0);
+    } else {
+      run_emulator(p, 0, 0);
+    }
   }
 }
 
 static void
 load_save_file()
 {
-  int n;
-  struct menu_window menu;
   int i;
 
-  n = count_save_file();
-  if (!n)
-    return;
-
-  push_menu_window(&menu, 0, 2, 30, n, 8);
-  menu.draw_item = draw_save_file;
-
-  while (run_menu_window(&menu, &i))
-    ;
-  
-  pop_window(&menu.wn);
+  i = select_file(save_file);
 
   if (i >= 0) {
     struct file f;
     void *p;
-    extern void *_save_data_read;
 
     save_file(i, &f);
     p = open_file(f.name, "nes", 0);
     if (!p)
       return;
-    load_emulator(p);
-    load_mapper(p);
-    _save_data_read = f.start;
-    enter_emulator(p);
+    if (f.dev == DEV_RAM) {
+      run_emulator(p, &f, &f);
+    } else {
+      run_emulator(p, 0 , &f);
+    }
   }
 }
 
@@ -190,7 +169,6 @@ static void
 query_format()
 {
   struct message_window mes;
-  struct file f;
   int ev;
 
   push_message_window(&mes);
@@ -218,9 +196,6 @@ query_format()
 int
 start_shell(void)
 {
-  int i;
-  int *p;
-
   writeh(0x204, 0x4004);
 
   init_file_system();
@@ -316,4 +291,11 @@ preinit_error()
 void
 printf(char *fmt, ...)
 {
+}
+
+void
+panic_no_such_file(char *name, char *ext)
+{
+  while (1)
+    ;
 }

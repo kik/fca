@@ -20,6 +20,32 @@ reg_save:
 
 	ALIGN
 
+
+@@@ 
+@@@ エミュレータのオプション
+@@@ ローダが設定するinclude/load.hを参照
+@@@ 
+	.globl	emulator_opt
+	.globl	emu_opt_n_prg_rom
+	.globl	emu_opt_n_chr_rom
+	.globl	emu_opt_mapper_num
+	.globl	emu_opt_scroll_type
+	.globl	emu_opt_has_sram
+	.globl	emu_opt_prg_rom_start
+	.globl	emu_opt_chr_rom_start
+	.globl	emu_opt_save_ram_write
+	.globl	emu_opt_save_ram_read
+emulator_opt:	
+emu_opt_n_prg_rom:	.long	0
+emu_opt_n_chr_rom:	.long	0
+emu_opt_mapper_num:	.long	0
+emu_opt_scroll_type:	.long	0
+emu_opt_has_sram:	.long	0
+emu_opt_prg_rom_start:	.long	0
+emu_opt_chr_rom_start:	.long	0
+emu_opt_save_ram_write:	.long	0
+emu_opt_save_ram_read:	.long	0
+
 @@@ 
 @@@ エントリポイント
 @@@ 

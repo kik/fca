@@ -2,82 +2,79 @@
 #include "file.h"
 #include "text.h"
 #include "load.h"
-#include "nes-header.h"
+#include "lib.h"
 
 extern long _emu_start;
 extern long _emu_end;
 extern long _emu_slow_start;
 extern long _emu_slow_end;
-extern void emulator_entry(void *nes_file);
+extern long _start_mapper;
+extern void emulator_entry();
 
-#if 0
-void
-show_nes_header(struct nes_header *h)
+
+int
+verify_nes_file(struct nes_header *p)
 {
-  if (memcmp(h->header, NES_ROM_HEADER, 4) != 0) {
-    printf("No NES ROM Header\n");
-    return;
-  }
-  printf("%x PRG ROM\n", h->n_prg_rom);
-  printf("%x CHR ROM\n", h->n_chr_rom);
-  if (h->rom_ctl_1 & NES_ROM_FOUR_SCREEN) {
-    printf("Four screen\n");
-  } else if (h->rom_ctl_1 & NES_ROM_VERTICAL_MIRRORING) {
-    printf("Vertical mirroring\n");
-  } else {
-    printf("horizontal mirroring\n");
-  }
-  if (h->rom_ctl_1 & NES_ROM_HAS_TRAINER)
-    printf("ROM has trainer\n");
-  printf("Mapper #%x\n",
-	 (h->rom_ctl_2 & NES_ROM_MAPPER_HEIGH) |
-	 ((h->rom_ctl_1 & NES_ROM_MAPPER_LOW) >> 4));
+  if (memcmp(p->header, "NES\x1A", 4) != 0)
+    return 0;
+  if (p->rom_ctl_2 & 0xF)
+    return 0;
+  if (memcmp(p->pad, "\0\0\0\0\0\0\0\0", 8) != 0)
+    return 0;
+  return 1;
 }
-#endif
 
-void
-load_emulator(void *nes_file)
+int
+nes_scroll_type(struct nes_header *p)
 {
-  long *p;
-  struct file f;
+  if (p->rom_ctl_1 & 0x08)
+    return 2;
+  else if (p->rom_ctl_1 & 0x01)
+    return 0;
+  else
+    return 1;
+}
 
-  //show_nes_header(nes_file);
+int
+nes_has_save_ram(struct nes_header *p)
+{
+  if (p->rom_ctl_1 & 0x02)
+    return 1;
+  else
+    return 0;
+}
+
+int
+nes_has_trainer(struct nes_header *p)
+{
+  if (p->rom_ctl_1 & 0x04)
+    return 1;
+  else
+    return 0;
+}
+
+int
+nes_mapper(struct nes_header *p)
+{
+  return (p->rom_ctl_1 >> 4) | (p->rom_ctl_2 & 0xF0);
+}
+
+static void
+load_emulator()
+{
+  struct file f;
+  void *p;
+
   p = open_file("emu", "bin", &f);
-  if (!p) {
-    printf("can't find emu.bin\n");
-    return;
-  }
-  printf("load emu.bin\n %x -> %x\n", p, &_emu_start);
+  if (!p)
+    panic_no_such_file("emu", "bin");
   memcpy(&_emu_start, p, f.length);
 
   p = open_file("emuslow", "bin", &f);
-  if (!p) {
-    printf("can't find emuslow.bin\n");
-    return;
-  }
-  printf("load emuslow.bin\n %x -> %x\n", p, &_emu_slow_start);
+  if (!p)
+    panic_no_such_file("emuslow", "bin");
   memcpy(&_emu_slow_start, p, f.length);
-
-#if 0
-  p = open_file("test", "sav", &f);
-  {
-    extern void *_save_data;
-    _save_data = p;
-  }
-#endif
 }
-
-
-extern int n_prg_rom;
-extern int n_chr_rom;
-extern int mapper_num;
-extern int scroll_type;
-extern int has_sram;
-extern void *prg_rom_start;
-extern void *chr_rom_start;
-
-
-extern int _start_mapper;
 
 struct mapper {
   int n;
@@ -93,104 +90,74 @@ static struct mapper mapper_list[] = {
   {0, 0}
 };
 
-void
-load_mapper(void *nes_file)
+static int
+load_mapper(int num)
 {
-  struct file mapper_file;
-  struct nes_header *h = nes_file;
-  char *p = nes_file;
-  void *q;
+  struct file f;
+  void *p;
   int i;
 
-  if (memcmp(h->header, NES_ROM_HEADER, 4) != 0) {
-    printf("No NES ROM Header\n");
-    return;
-  }
-
-  n_prg_rom = h->n_prg_rom;
-  n_chr_rom = h->n_chr_rom;
-  printf("%x PRG ROM\n", h->n_prg_rom);
-  printf("%x CHR ROM\n", h->n_chr_rom);
-
-  if (h->rom_ctl_1 & NES_ROM_FOUR_SCREEN) {
-    printf("Four screen\n");
-    scroll_type = 2;
-  } else if (h->rom_ctl_1 & NES_ROM_VERTICAL_MIRRORING) {
-    printf("Vertical mirroring\n");
-    scroll_type = 0;
-  } else {
-    printf("horizontal mirroring\n");
-    scroll_type = 1;
-  }
-
-  if (h->rom_ctl_1 & NES_ROM_HAS_TRAINER) {
-    printf("ROM has trainer\n");
-    p += 512 + 16;
-  } else {
-    p += 16;
-  }
-
-  mapper_num = (h->rom_ctl_2 & NES_ROM_MAPPER_HEIGH) |
-    ((h->rom_ctl_1 & NES_ROM_MAPPER_LOW) >> 4);
-
-  printf("Mapper #%x\n", mapper_num);
-
   for (i = 0; mapper_list[i].file; i++)
-    if (mapper_num == mapper_list[i].n)
+    if (num == mapper_list[i].n)
       break;
 
-  if (!mapper_list[i].file) {
-    printf("mapper is not supported\n");
-    while (1);
-  }
+  if (!mapper_list[i].file)
+    return 0;
 
-  q = open_file(mapper_list[i].file, "bin", &mapper_file);
-  if (!q) {
-    printf("%s: not found\n", mapper_list[i].file);
-    while (1);
-  }
-  printf("%s: found\n", mapper_list[i].file);
-  memcpy(&_start_mapper, q, mapper_file.length);
+  p = open_file(mapper_list[i].file, "bin", &f);
+  if (!p)
+    return 0;
 
-  prg_rom_start = p;
-  p += 16 * 1024 * n_prg_rom;
-  chr_rom_start = p;
+  memcpy(&_start_mapper, p, f.length);
+
+  return 1;
 }
 
-void
-enter_emulator(void *nes_file)
+#if 0
+extern int n_prg_rom;
+extern int n_chr_rom;
+extern int mapper_num;
+extern int scroll_type;
+extern int has_sram;
+extern void *prg_rom_start;
+extern void *chr_rom_start;
+#endif
+
+int
+run_emulator(struct nes_header *p, 
+	     struct file *save_w, struct file *save_r)
 {
-  /* こうすると
-   * ldr pc, =nes_start
-   * にしてくれる。
-   */
-  void (*start)(void *nes_file) = emulator_entry;
-  printf("call %x\n", start);
-  start(nes_file);
-}
+  struct emulator_opt *opt = &emulator_opt;
+  if (!verify_nes_file(p))
+    return 0;
 
-void
-compare_memory()
-{
-  long *p, *q;
-  struct file f;
-  int i, j;
+  load_emulator();
+  load_mapper(opt->mapper_num = nes_mapper(p));
+  
+  opt->n_prg_rom = p->n_prg_rom;
+  opt->n_chr_rom = p->n_chr_rom;
+  opt->scroll_type = nes_scroll_type(p);
 
-  //show_nes_header(nes_file);
-  p = open_file("emu", "bin", &f);
-  q = &_emu_start;
+  if (nes_has_trainer(p))
+    opt->prg_rom_start = p->data + 512;
+  else
+    opt->prg_rom_start = p->data;
 
-  for (i = 0; i < f.length;) {
-    for (j = 0; j < 8 && i < f.length;) {
-      if (*q != *p) {
-	printf("%x %x\n", q, *q);
-	j++;
-      }
-      p++; q++; i += 4;
-    }
-    while (_ioreg[0x98] & 1)
-      ;
-    while (! (_ioreg[0x98] & 1))
-      ;
+  opt->chr_rom_start = opt->prg_rom_start + 16 * 1024 * opt->n_prg_rom;
+
+  if (save_w)
+    opt->save_file_write = save_w->start;
+  if (save_r)
+    opt->save_file_read = save_r->start;
+
+  {
+    /* こうすると
+     * ldr pc, =nes_start
+     * にしてくれる。
+     */
+    void (* volatile start)() = emulator_entry;
+    start();
   }
+  return 1;
 }
+

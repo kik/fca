@@ -2,6 +2,15 @@
 #include "lib.h"
 
 char *
+strcpy(char *d, char *s)
+{
+  char *p = d;
+  while ((*p++ = *s++))
+    ;
+  return d;
+}
+
+char *
 strchr(char *p, char c)
 {
   while (*p && *p != c)

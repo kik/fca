@@ -8,7 +8,7 @@ OBJCOPY = $(CROSS_COMPILE)objcopy
 
 HOSTCC = gcc
 
-CFLAGS = -I../include -ffreestanding -O2
+CFLAGS = -I../include -ffreestanding -O2 -Wall
 CPPFLAGS = -I../include
 
 OBJ = crt0.o shell.o lib.o file.o load.o font.o window.o

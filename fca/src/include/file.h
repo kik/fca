@@ -32,7 +32,11 @@ struct save_file_super {
   long sum;
 };
 
+#define DEV_ROM  1
+#define DEV_RAM  2
+
 struct file {
+  int dev;
   int fileno;
   char name[MAX_NAME_LEN];
   char ext[MAX_EXT_LEN];
@@ -55,6 +59,8 @@ void *open_fileno(int fileno, struct file *f);
 void *next_file(struct file *f, struct file *prev);
 
 void *open_save_file(int n, struct file *f);
+
+int write_save_file(char *name, char *ext, int n);
 
 int namecmp(struct file *f, char *name);
 

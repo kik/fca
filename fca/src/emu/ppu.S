@@ -712,29 +712,27 @@ read_save_ram:
 write_save_ram:	
 	ldr	r1, = save_ram - 0x6000
 	strb	r0, [r1, REG_ADDR]
-	ldr	r1, =_save_data_write
-	ldr	r1, [r1]
+	ldr	r1, save_data_write
 	teq	r1, #0
 	moveq	pc, lr
 	sub	r1, r1, #0x6000
 	strb	r0, [r1, REG_ADDR]
 	mov	pc, lr
 
+save_data_write:	.long	0
+
 	.pool
 
 	SECTION_SLOW
 	ALIGN
 
-	.globl	_save_data_read
-	.globl	_save_data_write
-_save_data_read:	.long	0
-_save_data_write:	.long	0
 
 	.globl	init_save_ram
 init_save_ram:
-	ldr	r0, _save_data_read
+	ldr	r0, =emu_opt_save_ram_read
+	ldr	r0, [r0]
 	teq	r0, #0
-	moveq	pc, lr
+	beq	2f
 
 	adr	r1, save_ram
 	mov	r2, #0x2000
@@ -742,7 +740,27 @@ init_save_ram:
 	strb	r3, [r1], #1
 	subs	r2, r2, #1
 	bne	1b
+
+2:	
+	ldr	r0, =emu_opt_save_ram_write
+	ldr	r0, [r0]
+	ldr	r1, =save_data_write
+	str	r0, [r1]
+	teq	r0, #0
+	moveq	pc, lr
+	ldr	r1, =emu_opt_save_ram_read
+	ldr	r1, [r1]
+	teq	r0, r1
+	moveq	r0, r1
+
+	mov	r2, #0x2000
+3:	ldrb	r3, [r1], #1
+	strb	r3, [r0], #1
+	subs	r2, r2, #1
+	bne	3b
+
 	mov	pc, lr
+	.pool
 
 	.globl	save_ram
 save_ram:	.fill	0x2000, 1, 0

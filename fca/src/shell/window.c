@@ -3,6 +3,7 @@
 
 #include "vram.h"
 #include "window.h"
+#include "file.h"
 
 /*
  * DQみたいなUI
@@ -95,8 +96,10 @@ run_window(struct window *wn, int *param)
   int press;
   int need_refresh = 0;
 
-  if (wn->ev & (1 << EV_QUIT))
+  if (wn->ev & (1 << EV_QUIT)) {
+    wn->ev ^= (1 << EV_QUIT);
     return EV_QUIT;
+  }
 
   if (redraw_all) {
     clear_screen();
@@ -339,3 +342,38 @@ run_menu_window(struct menu_window *menu, int *param)
   return ev;
 }
 
+static void *(*select_file_get_file)(int n, struct file *f);
+
+static void
+select_file_draw_item(struct menu_window *menu, int n, int x, int y)
+{
+  struct file f;
+
+  if (select_file_get_file(n, &f)) {
+    printfxy(x, y, "%s.%s", f.name, f.ext);
+    if (f.dev == DEV_ROM) {
+      printfxy(x + 18, y, " ROM%d", f.fileno);
+    } else {
+      printfxy(x + 18, y, " RAM%d", f.fileno);
+    }
+  }
+}
+
+int
+select_file(void *(*get_file)(int n, struct file *f))
+{
+  int n;
+  struct menu_window menu;
+  int i;
+
+  for (n = 0; get_file(n, 0); n++)
+    ;
+  push_menu_window(&menu, 0, 2, 30, n, 8);
+  menu.draw_item = select_file_draw_item;
+  select_file_get_file = get_file;
+
+  while (run_menu_window(&menu, &i))
+    ;
+  pop_window(&menu.wn);
+  return i;
+}

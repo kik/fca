@@ -22,25 +22,25 @@ font: subdir
 shell.elf: subdir
 	$(LD) -o $@ $(OBJ) -T shell.lds -Map shell.map
 
-shell.bin: shell.elf
+bin/shell.bin: shell.elf
 	$(OBJCOPY) -O binary $< $@ -j .text -j .rodata -j .data
 
-emu.bin: shell.elf
+bin/emu.bin: shell.elf
 	$(OBJCOPY) -O binary $< $@ -j emu
 
-emuslow.bin: shell.elf
+bin/emuslow.bin: shell.elf
 	$(OBJCOPY) -O binary $< $@ -j emu.slow
 
-$(MAPPER): shell.elf
-	$(OBJCOPY) -O binary $< $@ -j $(@:.bin=)
+$(MAPPER:%=bin/%): shell.elf
+	$(OBJCOPY) -O binary $< $@ -j $(@:bin/%.bin=%)
 
-shell.gba: shell.bin emu.bin emuslow.bin $(MAPPER) font
-	cp shell.bin shell.gba
-	./tool/addfile emu.bin		emu.bin		>>shell.gba
-	./tool/addfile emuslow.bin	emuslow.bin	>>shell.gba
+shell.gba: bin/shell.bin bin/emu.bin bin/emuslow.bin $(MAPPER:%=bin/%) font
+	cp bin/shell.bin shell.gba
+	./tool/addfile bin/emu.bin	emu.bin		>>shell.gba
+	./tool/addfile bin/emuslow.bin	emuslow.bin	>>shell.gba
 
 	for i in $(MAPPER); do \
-	  ./tool/addfile $$i		$$i		>>shell.gba; \
+	  ./tool/addfile bin/$$i	$$i		>>shell.gba; \
 	done
 
 	./tool/addfile data/font.dat	font.dat	>>shell.gba

@@ -1,6 +1,7 @@
 #include "gba.h"
 #include "file.h"
 #include "text.h"
+#include "lib.h"
 
 static struct file_header *first_file;
 
@@ -37,6 +38,7 @@ init_file_system()
 static void
 make_file(struct file *f, struct file_header *p, int fileno)
 {
+  f->dev = DEV_ROM;
   f->fileno = fileno;
   memcpy(f->name, p->name, MAX_NAME_LEN);
   memcpy(f->ext,  p->ext,  MAX_EXT_LEN);
@@ -135,24 +137,47 @@ init_save_file_system()
   return 0;
 }
 
-void
-format_save_file_system()
+static void
+sync_save_file_system()
 {
-  int i;
-  int sum, *p;
+  int i, sum, *p;
 
-  memset(save_file_super, 0, sizeof save_file_super);
-  save_file_super.magic = SAVE_SUPER_MAGIC;
-  for (i = 0; i < MAX_SAVE_FILE; i++)
-    save_file_super.header[i].magic = FILE_END_MAGIC;
-  
   sum = 0;
+  save_file_super.sum = 0;
   p = (int *)&save_file_super;
   for (i = 0; i < (sizeof save_file_super) / 4; i++)
     sum ^= p[i];
 
   save_file_super.sum = sum;
   memcpy8((void *)0x0E000000, &save_file_super, sizeof save_file_super);
+}
+
+void
+format_save_file_system()
+{
+  int i;
+
+  memset(&save_file_super, 0, sizeof save_file_super);
+  save_file_super.magic = SAVE_SUPER_MAGIC;
+  for (i = 0; i < MAX_SAVE_FILE; i++)
+    save_file_super.header[i].magic = FILE_END_MAGIC;
+
+  sync_save_file_system();
+}
+
+int
+write_save_file(char *name, char *ext, int n)
+{
+  struct save_file_header *p;
+
+  p = &save_file_super.header[n];
+  memset(p, 0, sizeof *p);
+  p->magic = FILE_MAGIC;
+  strcpy(p->name, name);
+  strcpy(p->ext, ext);
+
+  sync_save_file_system();
+  return 1;
 }
 
 void *
@@ -165,17 +190,23 @@ open_save_file(int n, struct file *f)
     return 0;
 
   p = &save_file_super.header[n];
-  if (p->magic == FILE_END_MAGIC)
-    return 0;
 
   start = (void *)(0x0E000000 + (n + 1) * SAVE_FILE_LEN);
   if (f) {
+    memset(f, 0, sizeof *f);
+    f->dev = DEV_RAM;
     f->fileno = n;
-    memcpy(f->name, p->name, MAX_NAME_LEN);
-    memcpy(f->ext,  p->ext, MAX_EXT_LEN);
     f->start = start;
-    f->length = SAVE_FILE_LEN;
     f->header = 0;
+    if (p->magic == FILE_END_MAGIC) {
+      strcpy(f->name, "EMPTY");
+      strcpy(f->ext, "DAT");
+      f->length = 0;
+    } else {
+      memcpy(f->name, p->name, MAX_NAME_LEN);
+      memcpy(f->ext,  p->ext, MAX_EXT_LEN);
+      f->length = SAVE_FILE_LEN;
+    }
   }
   return start;
 }

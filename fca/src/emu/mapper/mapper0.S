@@ -18,17 +18,17 @@ m0_write_rom:
 init_mapper1:	
 	stmfd	sp!, {lr}
 
-	ldr	r0, = chr_rom_start
+	ldr	r0, = emu_opt_chr_rom_start
 	ldr	r0, [r0]
 	str	r0, m1_chr_rom
-	ldr	r0, = n_chr_rom
+	ldr	r0, = emu_opt_n_chr_rom
 	ldr	r0, [r0]
 	str	r0, m1_n_chr_rom
 
-	ldr	r0, = prg_rom_start
+	ldr	r0, = emu_opt_prg_rom_start
 	ldr	r0, [r0]
 	str	r0, m1_prg_rom
-	ldr	r1, = n_prg_rom
+	ldr	r1, = emu_opt_n_prg_rom
 	ldr	r1, [r1]
 	mov	r2, #M1_SMALL
 	teq	r1, #64
@@ -312,11 +312,11 @@ m1_write_rom:
 	.section mapper2, "awx"
 init_mapper2:	
 	stmfd	sp!, {lr}
-	ldr	r0, = prg_rom_start
+	ldr	r0, = emu_opt_prg_rom_start
 	ldr	r0, [r0]
 	str	r0, m2_prg_rom
 
-	ldr	r1, = n_prg_rom
+	ldr	r1, = emu_opt_n_prg_rom
 	ldr	r1, [r1]
 	str	r1, m2_n_prg_rom
 
@@ -345,10 +345,10 @@ m2_n_prg_rom:	.long	0
 
 
 init_mapper3:	
-	ldr	r0, =chr_rom_start
+	ldr	r0, =emu_opt_chr_rom_start
 	ldr	r0, [r0]
 	str	r0, m3_chr_rom
-	ldr	r0, =n_chr_rom
+	ldr	r0, =emu_opt_n_chr_rom
 	ldr	r0, [r0]
 	sub	r0, r0, #1
 	str	r0, m3_n_chr_rom
@@ -386,14 +386,14 @@ m3_write_rom:
 	.section mapper4, "awx"
 init_mapper4:	
 	stmfd	sp!, {lr}
-	ldr	r0, = prg_rom_start
+	ldr	r0, = emu_opt_prg_rom_start
 	ldr	r0, [r0]
 	str	r0, m4_prg_rom
 	str	r0, m4_prg0
 	add	r1, r0, #0x2000
 	str	r1, m4_prg1
 
-	ldr	r1, = n_prg_rom
+	ldr	r1, = emu_opt_n_prg_rom
 	ldr	r1, [r1]
 	str	r1, m4_n_prg_rom
 
@@ -401,11 +401,11 @@ init_mapper4:
 	sub	r0, r0, #0x4000
 	str	r0, m4_prg_rom_last
 
-	ldr	r0, = chr_rom_start
+	ldr	r0, = emu_opt_chr_rom_start
 	ldr	r0, [r0]
 	str	r0, m4_chr_rom
 
-	ldr	r0, = n_chr_rom
+	ldr	r0, = emu_opt_n_chr_rom
 	ldr	r0, [r0]
 	str	r0, m4_n_chr_rom
 

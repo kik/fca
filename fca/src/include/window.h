@@ -37,12 +37,20 @@ void push_window(struct window *wn, char x, char y, char w, char h);
 void pop_window();
 int  run_window(struct window *wn, int *param);
 
+void quit_window(struct window *wn);
+
 void push_message_window(struct message_window *mwn);
 int run_message_window(struct message_window *mwn, int *param);
+void set_message_widow(struct message_window *mwn, char *msg);
+
+int yes_or_no();
 
 void push_menu_window(struct menu_window *menu, int x, int y,
 		      int w, int n, int n_vis);
 
 int run_menu_window(struct menu_window *menu, int *param);
+
+struct file;
+int select_file(void *(get_file)(int n, struct file *f));
 
 #endif

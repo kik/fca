@@ -111,16 +111,25 @@ m4_write_8001:
 	teq	r1, #0
 	moveq	pc, lr
 	and	r0, r0, #0xFE
+	strb	r0, m4_chr0
+	b	set_vram_bank_0to1	
+#if 0
+	and	r0, r0, #0xFE
 	orr	r1, r0, r0, lsl #8
 	add	r1, r1, #1
 	strh	r1, m4_chr0
 	ldr	r2, m4_chr_rom
 	add	r0, r2, r0, lsl #10
 	b	set_vram_bank_0to1
+#endif
 1:	
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
 	moveq	pc, lr
+	and	r0, r0, #0xFE
+	strb	r0, m4_chr2
+	b	set_vram_bank_2to3
+#if 0
 	and	r0, r0, #0xFE
 	orr	r1, r0, r0, lsl #8
 	add	r1, r1, #1
@@ -128,41 +137,51 @@ m4_write_8001:
 	ldr	r2, m4_chr_rom
 	add	r0, r2, r0, lsl #10
 	b	set_vram_bank_2to3
+#endif
 2:	
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
 	moveq	pc, lr
 	strb	r0, m4_chr4
+	b	set_vram_bank_4
+#if 0
 	mov	r1, r0
 	ldr	r2, m4_chr_rom
 	add	r0, r2, r0, lsl #10
 	b	set_vram_bank_4
+#endif
 3:	
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
 	moveq	pc, lr
 	strb	r0, m4_chr5
+#if 0
 	mov	r1, r0
 	ldr	r2, m4_chr_rom
 	add	r0, r2, r0, lsl #10
+#endif
 	b	set_vram_bank_5
 4:	
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
 	moveq	pc, lr
 	strb	r0, m4_chr6
+#if 0
 	mov	r1, r0
 	ldr	r2, m4_chr_rom
 	add	r0, r2, r0, lsl #10
+#endif
 	b	set_vram_bank_6
 5:	
 	ldr	r1, m4_n_chr_rom
 	teq	r1, #0
 	moveq	pc, lr
 	strb	r0, m4_chr7
+#if 0
 	mov	r1, r0
 	ldr	r2, m4_chr_rom
 	add	r0, r2, r0, lsl #10
+#endif
 	b	set_vram_bank_7
 
 6:	

@@ -14,18 +14,22 @@ init_mapper:
 	.globl	reset_mapper
 reset_mapper:	
 	stmfd	sp!, {lr}
-
 	ldopt	r1, EMU_OPT_n_chr_rom
 	teq	r1, #0
 	orreq	REG_P_REST, REG_P_REST, #P_REST_HAS_VRAM
 	beq	1f
 
+#if 0
 	ldopt	r0, EMU_OPT_chr_rom_start
 	ldr	r1, = 0x03020100
 	ldr	r2, = 0x07060504
 	bl	set_vram_bank_0to7
+#endif
+	mov	r0, #0
+	bl	set_vram_bank_0to7
 
 1:	
+#if 0
 	ldopt	r1, EMU_OPT_n_prg_rom
 	teq	r1, #1
 	beq	1f
@@ -56,6 +60,7 @@ reset_mapper:
 	teq	r0, #2
 	beq	set_4_scroll
 4:	
+#endif
 	bl	_start_mapper
 	ldmfd	sp!, {pc}
 

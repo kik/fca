@@ -1790,7 +1790,7 @@ set_memory_map_C:
 set_memory_map_E:
 	ldr	r1, prg_rom_start
 	add	r0, r1, r0, lsl #13
-	sub	r0, r0, #0xC000
+	sub	r0, r0, #0xE000
 	str	r0, prg_rom_memory_map + 0xC
 	mov	pc, lr
 

@@ -693,6 +693,20 @@ init_ppu:
 
 	.globl	reset_ppu
 reset_ppu:	
+	stmfd	sp!, {lr}
+
+	ldopt	r0, EMU_OPT_n_chr_rom
+	teq	r0, #0
+	orreq	REG_P_REST, REG_P_REST, #P_REST_HAS_VRAM
+
+	ldopt	r0, EMU_OPT_scroll_type
+	adr	lr, 1f
+	teq	r0, #0;	beq	set_h_scroll
+	teq	r0, #1;	beq	set_v_scroll
+	teq	r0, #2;	beq	set_4_scroll
+1:	
+
+	ldmfd	sp!, {pc}
 	mov	pc, lr
 	
 

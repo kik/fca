@@ -220,6 +220,10 @@ m1_write_rom:
 	ldrb	r1, m1_regs
 	tst	r1, #0x10
 	ldrb	r1, m1_regs + 1
+	mov	r0, r1, lsl #2
+	bne	set_vram_bank_0to3
+	beq	set_vram_bank_0to7
+#if 0
 	mov	r1, r1, lsl #2
 	ldr	r0, m1_chr_rom
 	add	r0, r0, r1, lsl #10
@@ -233,6 +237,7 @@ m1_write_rom:
 	add	r2, r1, r2
 	bne	set_vram_bank_0to3
 	beq	set_vram_bank_0to7
+#endif
 13:	
 	mov	pc, lr
 
@@ -264,6 +269,10 @@ m1_write_rom:
 	tstne	r1, #0x10
 	ldmeqfd	sp!, {pc}
 
+	ldrb	r0, m1_regs + 2
+	mov	r0, r0, lsl #2
+	bl	set_vram_bank_4to7
+#if 0
 	ldr	r0, m1_chr_rom
 	ldrb	r1, m1_regs + 2
 	mov	r1, r1, lsl #2
@@ -275,6 +284,7 @@ m1_write_rom:
 	add	r2, r2, #1
 	orr	r1, r1, r2, lsl #24
 	bl	set_vram_bank_4to7
+#endif
 	ldmfd	sp!, {pc}
 3:	
 	strb	r3, m1_regs + 3

@@ -1,5 +1,6 @@
 #include "nes.h"
 #include "gba-regs.h"
+#include "struct.h"
 
 	SECTION_FAST
 	ALIGN
@@ -54,30 +55,35 @@ tile_ram:
 @@@ 
 @@@ 
 
+chr_rom_start:	.long	0
+
 @@@ r0 => アドレス
 @@@ r1 => 4バイトのキー(アドレスの比較に用いる)
 @@@ r2 => 4バイトのキー(アドレスの比較に用いる)
 
 	.globl	set_vram_bank_0to7
 set_vram_bank_0to7:	
-	str	r1, tile_map_key
-	str	r2, tile_map_key + 4
+	ldr	r1, chr_rom_start
+	add	r1, r1, r0, lsl #10
 
-	str	r0, tile_map + 4 * 0
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 1
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 2
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 3
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 4
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 5
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 6
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 7
+	str	r1, tile_map + 0x00;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x04;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x08;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x0C;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x10;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x14;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x18;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x1C;	@add	r1, r1, #0x400
+
+	strb	r0, tile_map_key + 0;	add	r0, r0, #1
+	strb	r0, tile_map_key + 1;	add	r0, r0, #1
+	strb	r0, tile_map_key + 2;	add	r0, r0, #1
+	strb	r0, tile_map_key + 3;	add	r0, r0, #1
+	strb	r0, tile_map_key + 4;	add	r0, r0, #1
+	strb	r0, tile_map_key + 5;	add	r0, r0, #1
+	strb	r0, tile_map_key + 6;	add	r0, r0, #1
+	strb	r0, tile_map_key + 7;	@add	r0, r0, #1
+	
 	mov	pc, lr
 
 @@@ r0 => アドレス
@@ -85,115 +91,90 @@ set_vram_bank_0to7:
 
 	.globl	set_vram_bank_0to3
 set_vram_bank_0to3:	
-	str	r1, tile_map_key
-	str	r0, tile_map + 4 * 0
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 1
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 2
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 3
+	ldr	r1, chr_rom_start
+	add	r1, r1, r0, lsl #10
+
+	str	r1, tile_map + 0x00;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x04;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x08;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x0C;	@add	r1, r1, #0x400
+
+	strb	r0, tile_map_key + 0;	add	r0, r0, #1
+	strb	r0, tile_map_key + 1;	add	r0, r0, #1
+	strb	r0, tile_map_key + 2;	add	r0, r0, #1
+	strb	r0, tile_map_key + 3;	@add	r0, r0, #1
+	
 	mov	pc, lr
 	
 	.globl	set_vram_bank_4to7
 set_vram_bank_4to7:	
-	str	r1, tile_map_key + 4
-	str	r0, tile_map + 4 * 4
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 5
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 6
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 7
+	ldr	r1, chr_rom_start
+	add	r1, r1, r0, lsl #10
+
+	str	r1, tile_map + 0x10;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x14;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x18;	add	r1, r1, #0x400
+	str	r1, tile_map + 0x1C;	@add	r1, r1, #0x400
+
+	strb	r0, tile_map_key + 4;	add	r0, r0, #1
+	strb	r0, tile_map_key + 5;	add	r0, r0, #1
+	strb	r0, tile_map_key + 6;	add	r0, r0, #1
+	strb	r0, tile_map_key + 7;	@add	r0, r0, #1
+	
 	mov	pc, lr
 
 @@@ r0 => アドレス
 @@@ r1 => 1バイトのキー(アドレスの比較に用いる)
 
+.macro	set_vram_bank_x	n
+	ldr	r1, chr_rom_start
+	add	r1, r1, r0, lsl #10
+	str	r1, tile_map + 0x04 * \n
+	strb	r0, tile_map_key + \n
+	mov	pc, lr
+.endm
+
 	.globl	set_vram_bank_0
-set_vram_bank_0:	
-	strb	r1, tile_map_key
-	str	r0, tile_map + 4 * 0
-	mov	pc, lr
-
 	.globl	set_vram_bank_1
-set_vram_bank_1:	
-	strb	r1, tile_map_key + 1
-	str	r0, tile_map + 4 * 1
-	mov	pc, lr
-
 	.globl	set_vram_bank_2
-set_vram_bank_2:	
-	strb	r1, tile_map_key + 2
-	str	r0, tile_map + 4 * 2
-	mov	pc, lr
-
 	.globl	set_vram_bank_3
-set_vram_bank_3:	
-	strb	r1, tile_map_key + 3
-	str	r0, tile_map + 4 * 3
-	mov	pc, lr
-
 	.globl	set_vram_bank_4
-set_vram_bank_4:	
-	strb	r1, tile_map_key + 4
-	str	r0, tile_map + 4 * 4
-	mov	pc, lr
-
 	.globl	set_vram_bank_5
-set_vram_bank_5:	
-	strb	r1, tile_map_key + 5
-	str	r0, tile_map + 4 * 5
-	mov	pc, lr
-
 	.globl	set_vram_bank_6
-set_vram_bank_6:	
-	strb	r1, tile_map_key + 6
-	str	r0, tile_map + 4 * 6
-	mov	pc, lr
-
 	.globl	set_vram_bank_7
-set_vram_bank_7:	
-	strb	r1, tile_map_key + 7
-	str	r0, tile_map + 4 * 7
-	mov	pc, lr
+set_vram_bank_0:	set_vram_bank_x	0
+set_vram_bank_1:	set_vram_bank_x	1
+set_vram_bank_2:	set_vram_bank_x	2
+set_vram_bank_3:	set_vram_bank_x	3
+set_vram_bank_4:	set_vram_bank_x	4
+set_vram_bank_5:	set_vram_bank_x	5
+set_vram_bank_6:	set_vram_bank_x	6
+set_vram_bank_7:	set_vram_bank_x	7
 
 
 @@@ r0 => アドレス
 @@@ r1 => 2バイトのキー(アドレスの比較に用いる)
 
+.macro	set_vram_bank_xx	n
+	ldr	r1, chr_rom_start
+	add	r1, r1, r0, lsl #10
+	str	r1, tile_map + 0x04 * \n
+	add	r1, r1, #0x400
+	str	r1, tile_map + 0x04 * \n + 4
+	strb	r0, tile_map_key + \n
+	add	r0, r0, #1
+	strb	r0, tile_map_key + \n + 1
+	mov	pc, lr
+.endm
+
 	.globl	set_vram_bank_0to1
-set_vram_bank_0to1:	
-	strh	r1, tile_map_key
-	str	r0, tile_map + 4 * 0
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 1
-	mov	pc, lr
-
 	.globl	set_vram_bank_2to3
-set_vram_bank_2to3:	
-	strh	r1, tile_map_key + 2
-	str	r0, tile_map + 4 * 2
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 3
-	mov	pc, lr
-
-
 	.globl	set_vram_bank_4to5
-set_vram_bank_4to5:	
-	strh	r1, tile_map_key + 4
-	str	r0, tile_map + 4 * 4
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 5
-	mov	pc, lr
-
 	.globl	set_vram_bank_6to7
-set_vram_bank_6to7:	
-	strh	r1, tile_map_key + 6
-	str	r0, tile_map + 4 * 6
-	add	r0, r0, #0x400
-	str	r0, tile_map + 4 * 7
-	mov	pc, lr
+set_vram_bank_0to1:	set_vram_bank_xx	0
+set_vram_bank_2to3:	set_vram_bank_xx	2
+set_vram_bank_4to5:	set_vram_bank_xx	4
+set_vram_bank_6to7:	set_vram_bank_xx	6
 
 @@@ 
 @@@ 0000-2000を8つにわける
@@ -633,6 +614,10 @@ init_tile_trans_table:
 	add	r2, r2, #1
 	teq	r2, #256
 	bne	1b
+
+	ldopt	r0, EMU_OPT_chr_rom_start
+	ldr	r1, = chr_rom_start
+	str	r0, [r1]
 
 	mov	pc, lr
 

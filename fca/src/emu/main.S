@@ -121,7 +121,17 @@ run_emulator:
 #endif
 	bl	cpu_reset
 emulate_frame:	
+	@@ 
+	@@ フレームの開始
+	@@ 
 	bl	ppu_start_frame
+	@@ Zの場合は描画しない
+	adr	lr, 2f
+	ldreq	r0, =113 * 241
+	addeq	REG_CYCLE, REG_CYCLE, r0
+	beq	cpu_exec
+
+	@@ NZの場合は240ライン描画する
 	@@ 0..239
 	mov	r0, #0
 1:	
@@ -130,14 +140,18 @@ emulate_frame:
 	bl	cpu_exec
 	@@ Hsync
 	@@ draw line
+	bl	draw_line
 	
 	ldr	r0, current_line
+	teq	r0, #30
+	orreq	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT
 	add	r0, r0, #1
 	cmp	r0, #240
 	bcc	1b
 
 	@@ 240
 	add	REG_CYCLE, REG_CYCLE, #113
+2:	
 	bl	cpu_exec
 	@@ 241
 	add	REG_CYCLE, REG_CYCLE, #113

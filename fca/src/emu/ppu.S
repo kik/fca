@@ -151,6 +151,7 @@ write_2004:
 @@@ loopy_x は上3ビットを使う
 @@@ 
 	ALIGN
+loopy_tx:	
 loopy_x:	.short	0
 loopy_t:	.short	0
 loopy_v:	.long	0
@@ -168,11 +169,11 @@ write_2005:
 	bne	1f
 	@@ first write
 	@@ tx:0000000000011111.111=d:11111111
-	ldr	r1, loopy_x
-	mov	r1, r1, lsl #21
+	ldr	r1, loopy_tx
+	mov	r1, r1, lsr #21
 	orr	r1, r0, r1, lsl #8
-	mov	r1, r1, lsl #21
-	str	r1, loopy_x
+	mov	r1, r1, lsl #13
+	str	r1, loopy_tx
 	mov	pc, lr
 
 1:	@@ second write
@@ -181,7 +182,7 @@ write_2005:
 	ldrh	r1, loopy_t
 	bic	r1, r1, #0x3E0
 	and	r2, r0, #0xF8
-	orr	r2, r2, r1, lsl #2
+	orr	r2, r1, r2, lsl #2
 
 	bic	r2, r2, #0x7000
 	and	r1, r0, #7
@@ -272,6 +273,263 @@ write_2007:
 	cmp	r1, #0x3C0
 	bcs	write_attr
 	b	write_map
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ 描画
+@@@ 
+@@@ といっても，ほとんどの部分はハードウェアにさせる
+@@@ 
+@@@ 描画の開始時にレジスタの設定をして
+@@@ 
+@@@ ラインごとにスクロールの値を記録する
+@@@ 
+@@@ 記録した値はGBAのHBLごとにレジスタに書き込まなければいけない
+@@@ HBL毎にDMAを実行するのが簡単である。
+@@@ 
+
+@@@ 
+@@@ 描画の開始
+@@@ 
+@@@ Z	<= 画面を描画する
+@@@ NZ	<= 画面を描画しない
+@@@ 
+	.globl	ppu_start_frame
+ppu_start_frame:
+	mov	r1, #0x04000000
+	mov	r0, #0
+
+	@@ BGを描く場合は BG_0 を有効に
+	tst	REG_P_REST, #P_REST_DRAW_BG
+	orrne	r0, r0, #0x0100
+
+	tst	REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
+	@@ BGもSPRも描かない場合は画面をブランクにする
+	@@ 白くなってしまうのでなんとかしないと
+	orreq	r0, r0, #0x80
+	strh	r0, [r1]
+	@@ BGもSPRも描かないならここでおわり
+	moveq	pc, lr
+
+	@@ BG_0 を設定する
+	@@ 
+	@@ タイルは0600_0000と0600_4000から選択する
+	@@ 
+	@@ マップは0600_2000に固定
+	@@ 
+	mov	r0, #0x4400
+	tst	REG_P_REST, #P_REST_BG_ADR
+	orrne	r0, r0, #0x0004	@ タイルを変更
+	strh	r0, [r1, #0x8]
+
+	ldr	r1, loopy_tx
+	mov	r1, r1, lsr #16
+	str	r1, loopy_v
+
+	adr	r1, skip_table
+	str	r1, nes_line
+
+	mov	pc, lr
+
+@@@ 
+@@@ ラインごとのX，Yのスクロールの値
+@@@ 160ラインある。
+@@@ 
+
+scroll_value:	
+	.fill	160, 4, 0
+
+	ALIGN
+
+nes_line:
+	.long	0
+
+	ALIGN
+
+@@@ 
+@@@ 1ライン描画したふりをする
+@@@ 
+@@@ 実際にはスクロール値を保存するだけ
+@@@ 
+@@@ NESのスクロール値は次の3つにばらばらに格納されている
+@@@ 
+@@@ loopy_x
+@@@ 210
+@@@ +++---X tile offset
+@@@ 
+@@@ loopy_t
+@@@ FEDCBA9876543210
+@@@ |||||||||||+++++---X tile index
+@@@ ||||||+++++---Unused
+@@@ |||||+---name table X
+@@@ +++++---Unused
+@@@ 
+@@@ loopy_v
+@@@ 
+@@@ FEDCBA9876543210
+@@@ |||||||||||+++++---Unused
+@@@ ||||||+++++---Y tile index
+@@@ |||||+---Unused
+@@@ ||||+---name table Y
+@@@ |+++---Y tile offset
+@@@ +---Unused
+@@@ 
+@@@ ラインを書く前に loopy_v を下のように変更する
+@@@ 
+@@@ FEDCBA9876543210
+@@@ |||||||||||+++++---X tile index
+@@@ ||||||+++++---Y tile index
+@@@ ||||++--- name table YX
+@@@ |+++---Y tile offset
+@@@ +---Unused
+@@@ 
+@@@ これをGBAのスクロール値に変えると
+@@@ X
+@@@ FEDCBA9876543210
+@@@ |||||||||||||+++---X offset
+@@@ ||||||||+++++---X index
+@@@ |||||||+---name table #
+@@@ +++++++---Unused
+@@@ 
+@@@ Y
+@@@ FEDCBA9876543210
+@@@ |||||||||||||+++---Y offset
+@@@ ||||||||+++++---Y index
+@@@ |||||||+---name table #
+@@@ +++++++---Unused
+@@@ 
+@@@ Xはラインごとに変換しなければいけない
+@@@ Yにこの値を使うと一番上のラインにこのラインが表示されるので
+@@@ GBAのライン番号を引かなければならない
+@@@ 
+	.globl	draw_line
+
+draw_line:
+	ldr	r0, nes_line
+	ldrb	r3, [r0], #1
+	str	r0, nes_line
+	@@ r3 は GBA のライン番号(0-159)
+	@@ 255 の場合はこのラインはスキップする
+
+	@@ v:0000010000011111=t:0000010000011111
+	@@ vを更新してXのスクロール値を得る
+	ldr	r0, loopy_v
+	ldr	r1, loopy_tx
+
+	mov	r2,     #0x04100000
+	orr	r2, r2, #0x000FE000
+
+	@@ loopy_v & ~r2
+	@@ loopy_t &  r2
+	bic	r0, r0, r2, lsr #16
+	and	r1, r1, r2
+
+	@@ Yのスクロール値をr2におく
+	orr	r2, r0, r0, lsr #10
+	orr	r2, r2, r2, lsl #9
+	mov	r2, r2, lsl #14
+	sub	r2, r2, r3, lsl #16
+
+	orr	r0, r0, r1, lsr #16
+	@@ Xのスクロール値をr2におく
+	orr	r2, r2, r1, lsr #13
+	and	r1, r1, #0x04000000
+	orr	r2, r2, r1, lsr #18
+
+	teq	r3, #255
+	adr	r1, scroll_value
+	strne	r2, [r1, r3, lsl #2]
+
+	@@ loopy_v を次のラインにして保存する
+	add	r0, r0, #0x1000
+	bic	r0, r0, #0x8000
+	tst	r0, #0x7000
+	@@ Y オフセットが 7→0のとき0
+	bne	1f
+	@@ Y をふやして
+	add	r1, r0, #0x0020
+	ands	r2, r1, #0x3E0
+	@@ これが0になるのは元のYが31だった場合
+	eoreq	r0, r0, #0x0800
+	teqne	r2, #0x3C0
+	@@ Yが29だった場合もZを立てる
+	eoreq	r0, r0, #0x0800
+	biceq	r0, r0, #0x3E0
+	@@ Yが29でも31でもなかった場合
+	movne	r0, r1
+1:	str	r0, loopy_v
+	mov	pc, lr
+
+@@@ 
+@@@ GBAのVBL割り込みをハンドルする
+@@@ 
+@@@ HBLごとのDMAを設定してスクロール値が勝手に更新されるようにする
+@@@ ライン0のスクロールはここで設定する
+@@@ 
+	.globl	vbl_handler
+vbl_handler:	
+	mov	r0, #0x04000000
+
+	adr	r2, scroll_value
+
+	@@ ライン0のスクロール値を設定
+	ldr	r1, [r2], #4
+	str	r1, [r0, #0x10]
+#if 1
+	@@ DMA stop
+	mov	r1, #0
+	strh	r1, [r0, #0xBA]
+
+	@@ DMA SRC ← &scroll_value[1]
+	str	r2, [r0, #0xB0]
+
+	@@ DMA DST ← BG0_XY
+	add	r1, r0, #0x10	
+	str	r1, [r0, #0xB4]
+
+	@@ DMA Count ← 1
+	mov	r1, #1
+	strh	r1, [r0, #0xB8]
+
+	@@ DMA Ctrl
+	@@ DST:	fixed
+	@@ SRC:	inc
+	mov	r1, #0x60 @| 0x180
+	@@ Width: word
+	@@ Repeat
+	@@ HBlank
+	orr	r1, r1, #0x8000 | 0x2000 | 0x0400 | 0x0200
+	strh	r1, [r0, #0xBA]	
+#endif
+	mov	pc, lr
+
+@@@ 
+@@@ どのラインをスキップするか
+@@@ 
+@@@ 255 = スキップ
+@@@ 0-159 = GBAのライン番号
+@@@ 
+@@@ 上下13ラインはスキップして，残りは1/4をスキップする
+@@@ 
+skip_table:	
+#define P(n) n*6+2, 255, n*6+3, n*6+4, n*6+5, 255, n*6+6, n*6+7
+
+	.byte	255, 255, 255, 255, 255, 255, 255, 255	@ 0
+	.byte	255, 255, 255, 255, 255,   0,   1, 255	@ 8
+	.byte	P( 0), P( 1)				@ 16 
+	.byte	P( 2), P( 3), P( 4), P( 5)		@ 32
+	.byte	P( 6), P( 7), P( 8), P( 9)		@ 64
+	.byte	P(10), P(11), P(12), P(13)		@ 96
+	.byte	P(14), P(15), P(16), P(17)		@128
+	.byte	P(18), P(19), P(20), P(21)		@160
+	.byte	P(22), P(23), P(24), P(25)		@192
+	.byte	158, 159, 255, 255, 255, 255, 255, 255	@224
+	.byte	255, 255, 255, 255, 255, 255, 255, 255	@232
+
+#undef P
+
+	ALIGN
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -781,6 +1039,7 @@ attr_index_map:
 
 	ALIGN
 
+
 	.globl	init_ppu
 init_ppu:
 	@@ 画面を消す
@@ -794,43 +1053,18 @@ init_ppu:
 	b	init_tile_trans_table
 	mov	pc, lr
 
-
-	.globl	ppu_start_frame
-ppu_start_frame:
-#if 1
-	mov	r1, #0x04000000
-
-	mov	r0, #0
-	tst	REG_P_REST, #P_REST_DRAW_BG
-	orrne	r0, r0, #0x0100
-#endif
-	tst	REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
-	orreq	r0, r0, #0x80
-	strh	r0, [r1]
-	moveq	pc, lr
-#if 1
-	mov	r0, #0x0400
-
-	tst	REG_P_REST, #P_REST_BG_ADR
-	orrne	r0, r0, #0x0004
-
-	strh	r0, [r1, #0x8]
-#endif
-	ldr	r1, loopy_t
-	str	r1, loopy_v
-	mov	pc, lr
-
 	.globl	ppu_start_vbl
 	.globl	ppu_end_vbl
 ppu_start_vbl:	
 	orr	REG_P_REST, REG_P_REST, #P_REST_IN_VBL
-	orr	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT	
+	@orr	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT	
 	mov	pc, lr
 
 ppu_end_vbl:	
 	bic	REG_P_REST, REG_P_REST, #(P_REST_IN_VBL | P_REST_SPR_HIT)
 	mov	pc, lr
 
+#if 0
 scr:	.long	0
 
 	.globl	vbl_handler
@@ -878,6 +1112,7 @@ scroll_test:
 	.short	P(48), P(50), P(52), P(54)@ 21-24
 	.short	P(56), P(58), P(60), P(62)@ 25-28
 	.short	P(64), P(66), P(68), P(70)@ 29-32
+#endif
 
 	.globl	read_high_reg
 	.globl	read_save_ram

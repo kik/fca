@@ -21,7 +21,11 @@ MAPPER = 0 1 2 3 4 9 10 21 66
 
 BIN = shell.bin emu.bin emuslow.bin $(MAPPER:%=mapper%.bin)
 
-all: bindir
+all: fca.gba
+
+fca.gba: bindir
+	./tool/fca-mkfs -c -b bin/shell.bin $@ \
+	  bin/emu*.bin bin/mapper*.bin bin/*.dat
 
 #font: subdir
 #	./tool/selfont <data/font.dat.src >data/font.dat
@@ -57,7 +61,7 @@ subdir:
 # 	done
 
 clean:
-	rm -f $(BIN:%=bin/%) bin/fca.elf fca.map
+	rm -f $(BIN:%=bin/%) bin/fca.elf fca.map fca.gba
 	$(MAKE) -C shell clean
 	$(MAKE) -C emu clean
 	$(MAKE) -C tool clean

@@ -94,7 +94,8 @@ write_2001:
 read_2002:	
 	bic	REG_P_REST, REG_P_REST, #P_REST_PPU_TOGGLE
 	and	r0, REG_P_REST, #P_REST_2002
-	mov	r0, r0, lsl #12
+	mov	r0, r0, lsr #12
+	bic	REG_P_REST, REG_P_REST, #P_REST_IN_VBL
 	mov	pc, lr
 
 @@@ 
@@ -149,9 +150,12 @@ write_2004:
 @@@ 同時にロード・ストアできるようにloopy_t は loop_xの次におく
 @@@ loopy_x は上3ビットを使う
 @@@ 
+	ALIGN
 loopy_x:	.short	0
 loopy_t:	.short	0
 loopy_v:	.long	0
+
+	ALIGN
 
 @@@ 
 @@@ $2005 に書く
@@ -198,14 +202,14 @@ write_2006:
 	@@ t:00111111 00000000=d:00111111
 	@@ t:11000000 00000000=0
 	and	r1, r0, #0x3F
-	strh	r1, loopy_t + 1
+	strb	r1, loopy_t + 1
 	mov	pc, lr
 
 1:	@@ second write
 	@@ t:0000000011111111=d:11111111
 	@@ v=t
 	ldrb	r2, loopy_t + 1
-	orr	r2, r2, r0
+	orr	r2, r0, r2, lsl #8
 	strh	r2, loopy_t
 	strh	r2, loopy_v
 	mov	pc, lr
@@ -215,11 +219,11 @@ write_2006:
 @@@ 
 
 read_2007:	
-	ldr	r1, loopy_v
+	ldrh	r1, loopy_v
 	tst	REG_P_REST, #P_REST_PPU_32
 	addeq	r3, r1, #1
 	addne	r3, r1, #32
-	str	r3, loopy_v
+	strh	r3, loopy_v
 	bic	r1, r1, #0xC000
 	adr	r0, 1f
 	b	emu_printf
@@ -232,11 +236,13 @@ read_2007:
 @@@ 
 
 write_2007:	
-	ldr	r1, loopy_v
+	ldrh	r1, loopy_v
 	tst	REG_P_REST, #P_REST_PPU_32
 	addeq	r3, r1, #1
 	addne	r3, r1, #32
-	str	r3, loopy_v
+	strh	r3, loopy_v
+	
+	mov	pc, lr
 	bic	r1, r1, #0xC000
 	mov	r2, r0
 	adr	r0, 1f
@@ -790,8 +796,10 @@ set_vram_bank_0to7:
 
 	.globl	ppu_start_frame
 ppu_start_frame:	
-	@ldr	r1, loopy_t
-	@str	r1, loopy_v
+	tst	REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
+	moveq	pc, lr
+	ldr	r1, loopy_t
+	str	r1, loopy_v
 	mov	pc, lr
 
 	.globl	ppu_start_vbl
@@ -801,5 +809,5 @@ ppu_start_vbl:
 	mov	pc, lr
 
 ppu_end_vbl:	
-	bic	REG_P_REST, REG_P_REST, #P_REST_IN_VBL
+	bic	REG_P_REST, REG_P_REST, #(P_REST_IN_VBL | P_REST_SPR_HIT)
 	mov	pc, lr

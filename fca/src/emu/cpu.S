@@ -1629,7 +1629,8 @@ op60:
 @@@ 割り込みの処理
 @@@ 
 do_int:	
-	mov	r0, REG_PC
+	ldr	r0, pc_bank
+	sub	r0, REG_PC, r0
 	PUSH_WORD
 	bic	REG_P_REST, REG_P_REST, #P_REST_B_FLAG
 	SAVE_P

@@ -42,7 +42,7 @@ start_shell(void)
 }
 
 void
-panic(int op, int pc, unsigned char *sp)
+panic(int op, int pc, unsigned char *sp, void *p)
 {
   int i;
 
@@ -56,7 +56,7 @@ panic(int op, int pc, unsigned char *sp)
 
   printf("PANIC!!!\n");
   printf("OP: %x\n", op);
-  printf("PC: %x\n", pc);
+  printf("PC: %x(%x)\n", pc, p);
   printf("stack dump:\n");
   for (i = 0; i < 8; i++, sp += 4)
     printf("%x %x %x %x\n", sp[0], sp[1], sp[2], sp[3]);

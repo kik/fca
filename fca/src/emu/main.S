@@ -86,8 +86,6 @@ emu_break:
 	nop
 	mov	pc, lr
 
-current_line:	.long	0
-
 	ALIGN
 int_handler:
 	stmfd	sp!, {lr}
@@ -105,6 +103,23 @@ int_handler:
 
 	ldmfd	sp!, {pc}
 
+
+current_line:	.long	0
+hsync_handler:	.long	0
+
+	.globl	install_hsync_handler
+install_hsync_handler:	
+	str	r0, hsync_handler
+	mov	pc, lr
+
+.macro	HSYNC
+	ldr	r1, hsync_handler
+	teq	r1, #0
+	adr	lr, 9999f
+	movne	pc, r1
+9999:	
+.endm
+
 run_emulator:	
 	stmfd	sp!, {lr}
 #if 1
@@ -121,6 +136,10 @@ run_emulator:
 #endif
 	bl	cpu_reset
 emulate_frame:	
+	@@ 
+	@@ R を押している間テキストを表示する
+	@@ Lを押しながらRを押すとパニック(デバッグ用)
+	@@ 
 	mov	r0, #0x04000000
 	ldr	r1, [r0, #0x130]
 	tst	r1, #0x100
@@ -128,11 +147,11 @@ emulate_frame:
 	tst	r1, #0x200
 	moveq	r0, #0x01000000
 	beq	emu_panic
-	mov	r2, #0x0140
+	mov	r2, #0x0840
 	ldr	r3, = 0x1C08
 2:	
 	strh	r2, [r0]
-	strh	r3, [r0, #0x8]
+	strh	r3, [r0, #0xE]
 	ldr	r1, [r0, #0x130]
 	tst	r1, #0x100
 	beq	2b
@@ -141,42 +160,49 @@ emulate_frame:
 	@@ 
 	@@ フレームの開始
 	@@ 
-	bl	ppu_start_frame
-	tst	REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
-	@@ Zの場合は描画しない
-	adr	lr, 2f
-	ldreq	r0, =113 * 241
-	addeq	REG_CYCLE, REG_CYCLE, r0
-	beq	cpu_exec
-
-	@@ NZの場合は240ライン描画する
-	@@ 0..239
 	mov	r0, #0
-1:	
 	str	r0, current_line
+	bl	ppu_start_frame
+
+1:	
+	@@ 0-239
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
-	@@ Hsync
-	@@ draw line
-	bl	draw_line
 	
 	ldr	r0, current_line
+	HSYNC
+
+	tst	REG_P_REST, #(P_REST_DRAW_BG | P_REST_DRAW_SPR)
+	@@ Zの場合は描画しない
+	ldrne	r0, current_line
+	blne	draw_line
+
+	ldr	r0, current_line
+	@@ SMB1はここでHITを立てる
+	@@ HITの実装をしなければ
 	teq	r0, #30
 	orreq	REG_P_REST, REG_P_REST, #P_REST_SPR_HIT
+
 	add	r0, r0, #1
+	str	r0, current_line
 	cmp	r0, #240
 	bcc	1b
 
 	@@ 240
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
-2:	
+	mov	r0, #240
+	HSYNC
 	@@ 241
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
+	mov	r0, #241
+	HSYNC
 	@@ 242
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
+	mov	r0, #242
+	HSYNC
 
 	@@ 243 vbl start
 	bl	ppu_start_vbl
@@ -186,14 +212,24 @@ emulate_frame:
 	orrne	REG_P_REST, REG_P_REST, #P_REST_NMI_PENDING
 	add	REG_CYCLE, REG_CYCLE, #112
 	bl	cpu_exec
+	mov	r0, #243
+	HSYNC
 
 	@@ 244..261
-	mov	r0, #0
-1:	str	r0, current_line
+	mov	r0, #244
+	str	r0, current_line
+1:	
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
+
+	ldr	r0, current_line
+	HSYNC
+
 	ldr	r0, current_line
 	add	r0, r0, #1
+	str	r0, current_line
+
+	sub	r0, r0, #244
 	cmp	r0, #18
 	bcc	1b
 
@@ -201,6 +237,9 @@ emulate_frame:
 	bl	ppu_end_vbl
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
+	mov	r0, #6
+	add	r0, r0, #256
+	HSYNC
 
 	@@ 262.5
 	add	REG_CYCLE, REG_CYCLE, #56

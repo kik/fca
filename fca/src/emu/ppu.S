@@ -73,21 +73,7 @@ write_2000:
 	orr	r1, r1, r0, lsr #20
 	strh	r1, loopy_t
 
-	@@ SPRの設定が変更されたか？
-	tst	r2, #0x0C
-	moveq	pc, lr
-
-	tst	r2, #0x08
-	bne	1f
-	@@ SPRアドレスのみ更新
-	tst	REG_P_REST, #P_REST_SPR_ADR
-	bne	set_spr_adr_1
-	b	set_spr_adr_0
-1:	
-	@@ SPRサイズが更新された
-	tst	REG_P_REST, #P_REST_SPR_SZ
-	bne	set_spr_8x16
-	b	set_spr_8x8
+	mov	pc, lr
 
 @@@ 
 @@@ $2001 に書く
@@ -278,6 +264,7 @@ write_2007:
 @@@ 
 	.globl	ppu_start_frame
 ppu_start_frame:
+	stmfd	sp!, {lr}
 	mov	r1, #0x04000000
 	mov	r0, #0
 
@@ -301,30 +288,25 @@ ppu_start_frame:
 	@@ 
 	@@ マップは0600_2000に固定
 	@@ 
+	adr	r1, bg_cr_value
 	mov	r0, #0x4400
 	tst	REG_P_REST, #P_REST_BG_ADR
 	orrne	r0, r0, #0x0004	@ タイルを変更
-	strh	r0, [r1, #0x8]
+	strh	r0, [r1]
 
 	ldr	r1, loopy_tx
 	mov	r1, r1, lsr #16
 	str	r1, loopy_v
 
-	adr	r1, skip_table
+	ldr	r1, =skip_table
 	str	r1, nes_line
 
-	b	validate_tile
-	mov	pc, lr
+	bl	validate_tile
+	bl	validate_spr
 
-@@@ 
-@@@ ラインごとのX，Yのスクロールの値
-@@@ 160ラインある。
-@@@ 
+	ldmfd	sp!, {pc}
 
-scroll_value:	
-	.fill	160, 4, 0
-
-	ALIGN
+	.pool
 
 nes_line:
 	.long	0
@@ -399,6 +381,20 @@ draw_line:
 	@@ r3 は GBA のライン番号(0-159)
 	@@ 160以上 の場合はこのラインはスキップする
 
+	@@ BG_0 を設定する
+	@@ 
+	@@ タイルは0600_0000と0600_4000から選択する
+	@@ 
+	@@ マップは0600_2000に固定
+	@@ 
+	adr	r1, bg_cr_value
+	add	r1, r1, r3, lsl #1
+	mov	r0, #0x4400
+	tst	REG_P_REST, #P_REST_BG_ADR
+	orrne	r0, r0, #0x0004	@ タイルを変更
+	cmp	r3, #160
+	strcch	r0, [r1]
+
 	@@ v:0000010000011111=t:0000010000011111
 	@@ vを更新してXのスクロール値を得る
 	ldr	r0, loopy_v
@@ -449,6 +445,23 @@ draw_line:
 	mov	pc, lr
 
 @@@ 
+@@@ ラインごとのX，Yのスクロールの値
+@@@ 160ラインある。
+@@@ 
+
+scroll_value:	
+	.fill	160, 4, 0
+
+@@@ 
+@@@ ラインごとのBG_CRの設定
+@@@ 
+
+bg_cr_value:	
+	.fill	160, 2, 0
+
+	ALIGN
+
+@@@ 
 @@@ GBAのVBL割り込みをハンドルする
 @@@ 
 @@@ HBLごとのDMAを設定してスクロール値が勝手に更新されるようにする
@@ -457,6 +470,9 @@ draw_line:
 	.globl	vbl_handler
 vbl_handler:	
 	mov	r0, #0x04000000
+	
+	ldr	r1, bg_cr_value
+	strh	r1, [r0, #8]
 
 	adr	r2, scroll_value
 
@@ -513,8 +529,35 @@ vbl_handler:
 	mov	r1, #0x8400
 	strh	r1, [r0, #0xC6]	
 
+	@@ DMA stop
+	mov	r1, #0
+	strh	r1, [r0, #0xD2]
+
+	@@ DMA SRC ← &bg_cr_value[1]
+	ldr	r2, =bg_cr_value + 2
+	str	r2, [r0, #0xC8]
+
+	@@ DMA DST ← BG0_CR
+	add	r1, r0, #0x8	
+	str	r1, [r0, #0xCC]
+
+	@@ DMA Count ← 1
+	mov	r1, #1
+	strh	r1, [r0, #0xD0]
+
+	@@ DMA Ctrl
+	@@ DST:	fixed
+	@@ SRC:	inc
+	mov	r1, #0x60 @| 0x180
+	@@ Width: hword
+	@@ Repeat
+	@@ HBlank
+	orr	r1, r1, #0x8000 | 0x2000 | 0x0200
+	strh	r1, [r0, #0xD2]	
+
 	mov	pc, lr
 
+	.pool 
 @@@ 
 @@@ どのラインをスキップするか
 @@@ スプライトの位置を決めるのにも使う
@@ -741,6 +784,30 @@ write_spr_3:
 	@@ Spr X
 	strb	r0, [r3, #2]
 	mov	pc, lr
+
+spr_old:	.long	0
+
+validate_spr:	
+	ldr	r0, spr_old
+	eor	r1, r0, REG_P_REST
+	str	REG_P_REST, spr_old
+
+	@@ SPRの設定が変更されたか？
+	tst	r1, #(P_REST_SPR_SZ | P_REST_SPR_ADR)
+	moveq	pc, lr
+
+	tst	r1, #P_REST_SPR_SZ
+	bne	1f
+	@@ SPRアドレスのみ更新
+	tst	REG_P_REST, #P_REST_SPR_ADR
+	bne	set_spr_adr_1
+	b	set_spr_adr_0
+1:	
+	@@ SPRサイズが更新された
+	tst	REG_P_REST, #P_REST_SPR_SZ
+	bne	set_spr_8x16
+	b	set_spr_8x8
+
 
 @@@
 @@@ スプライトのサイズが8x16から8x8に変更された
@@ -1473,8 +1540,17 @@ write_high_reg:
 	beq	write_4014
 	teq	r1, #0x16
 	beq	write_4016
+	teq	r1, #0x17
+	beq	write_4017
 	mov	pc, lr
 
+write_4017:	
+	mov	r1, r0
+	adr	r0, 1f
+	b	emu_printf
+
+1:	.string "write 4017 %x\n"
+	ALIGN
 
 	.globl	read_save_ram
 	.globl	write_save_ram
@@ -1492,4 +1568,5 @@ write_save_ram:
 
 	SECTION_SLOW
 	ALIGN
+	.globl	save_ram
 save_ram:	.fill	0x2000, 1, 0

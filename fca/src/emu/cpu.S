@@ -209,6 +209,7 @@
 	adr	lr, 1f
 	ldr	pc, [pc, r3, lsl #2]
 	nop
+	nop
 	.long	write_ppu_reg
 	.long	write_high_reg
 	.long	write_save_ram
@@ -1530,14 +1531,17 @@ trace_jump:
 	ldr	r1, =0xFF45
 	teq	r1, r0
 	beq	2f
-	ldr	r1, =0x8025
-	teq	r1, r0
+	mov	r1, #0x04000000
+	ldr	r1, [r1, #0x130]
+	tst	r1, #0x200
+	bne	2f
 	@beq	2f
 	@cmp	r0, #0x2000
 	@bcs	2f
 	bleq	emu_break
 	ldr	r1, pc_bank
 	sub	r1, REG_PC, r1
+	mov	r3, REG_PC
 	mov	r2, r0
 	adr	r0, 1f
 	bl	emu_printf
@@ -1545,7 +1549,7 @@ trace_jump:
 	ldmfd	sp!, {r1}
 	ldmfd	sp!, {r0, lr}
 	mov	pc, r1
-1:	.string "jump %x=>%x\n"
+1:	.string "jump %x=>%x %x\n"
 	ALIGN
 	
 
@@ -1563,8 +1567,10 @@ pc_bank:	.long	0
 	bl	trace_jump
 #endif
 	adr	r1, memory_map
-	mov	r2, r0, lsr #13
+	movs	r2, r0, lsr #13
 	ldr	r1, [r1, r2, lsl #2]
+	and	r2, r0, #0x1800
+	subeq	r1, r1, r2
 	str	r1, pc_bank
 	add	REG_PC, r0, r1
 .endm
@@ -1650,7 +1656,7 @@ op20:
 	ALIGN
 memory_map:	
 	.long	nes_internal_ram
-	.long	0, 0, 0
+	.long	0, 0, save_ram - 0x6000
 	.long	0, 0, 0, 0
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1796,7 +1802,7 @@ set_memory_map_8toA:
 
 	.globl	set_memory_map_CtoE
 set_memory_map_CtoE:
-	adr	r1, memory_map + 0xC * 2
+	ldr	r1, =memory_map + 0xC * 2
 	str	r0, [r1]
 	str	r0, [r1, #4]
 	mov	pc, lr
@@ -2104,6 +2110,7 @@ emu_panic:
 	sub	r1, REG_PC, r2
 	ldr	r2, = nes_stack
 	add	r2, r2, REG_S, lsr #24
+	mov	r3, REG_PC
 	ldr	pc, =panic
 1:	b	1b
 	.pool

@@ -83,6 +83,14 @@ init_mapper4:
 	sub	r0, r0, #0x4000
 	str	r0, m4_prg_rom_last
 
+	ldr	r0, = chr_rom_start
+	ldr	r0, [r0]
+	str	r0, m4_chr_rom
+
+	ldr	r0, = n_chr_rom
+	ldr	r0, [r0]
+	str	r0, m4_n_chr_rom
+
 	adr	r0, m4_write_rom
 	bl	install_rom_write_handler
 	bl	m4_set_cpu_banks
@@ -247,7 +255,47 @@ m4_set_cpu_banks:
 	ldmfd	sp!, {pc}
 
 m4_set_ppu_banks:
-	mov	pc, lr
+	ldr	r1, m4_n_chr_rom
+	teq	r1, #0
+	moveq	pc, lr
+
+	stmfd	sp!, {lr}
+	bl	get_tile_map
+	ldr	r1, m4_chr_rom
+
+	ldr	r2, m4_chr01
+	add	r2, r1, r2, lsl #10
+	str	r2, [r0]
+	str	r2, [r0, #0x4]
+
+	ldr	r2, m4_chr23
+	add	r2, r1, r2, lsl #10
+	sub	r2, r2, #0x800
+	str	r2, [r0, #0x8]
+	str	r2, [r0, #0xC]
+
+	ldr	r2, m4_chr4
+	add	r2, r1, r2, lsl #10
+	sub	r2, r2, #0x1000
+	str	r2, [r0, #0x10]
+
+	ldr	r2, m4_chr5
+	add	r2, r1, r2, lsl #10
+	sub	r2, r2, #0x1400
+	str	r2, [r0, #0x14]
+
+	ldr	r2, m4_chr6
+	add	r2, r1, r2, lsl #10
+	sub	r2, r2, #0x1800
+	str	r2, [r0, #0x18]
+
+	ldr	r2, m4_chr7
+	add	r2, r1, r2, lsl #10
+	sub	r2, r2, #0x1C00
+	str	r2, [r0, #0x1C]
+
+	ldmfd	sp!, {lr}
+
 
 m4_hsync:	
 	ldr	r1, m4_enb_irq

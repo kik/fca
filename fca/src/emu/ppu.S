@@ -211,9 +211,10 @@ read_2007:
 	bic	r1, r1, #0x3000
 	mov	r2, r1, lsr #10
 	bic	r1, r1, #0xC00
-
+#if 0
 	cmp	r1, #0x3C0
 	bcs	read_attr
+#endif
 	b	read_map
 
 @@@ 
@@ -238,9 +239,10 @@ write_2007:
 	bic	r1, r1, #0x3000
 	mov	r2, r1, lsr #10
 	bic	r1, r1, #0xC00
-
+#if 0
 	cmp	r1, #0x3C0
 	bcs	write_attr
+#endif
 	b	write_map
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -653,35 +655,6 @@ vbl_handler:
 	mov	pc, lr
 
 	.pool 
-@@@ 
-@@@ どのラインをスキップするか
-@@@ スプライトの位置を決めるのにも使う
-@@@ 
-@@@ 0-159 = GBAのライン番号
-@@@ 残り  = スキップ
-@@@ 
-@@@ 上下13ラインはスキップして，残りは1/4をスキップする
-@@@ 
-skip_table:	
-#define P(n) n*6+2, n*6+3, n*6+3, n*6+4, n*6+5, n*6+6, n*6+6, n*6+7
-	.byte	243, 244, 245, 246, 247, 248, 249, 250	@ 0
-	.byte	251, 252, 253, 254, 255,   0,   1,   2	@ 8
-	.byte	P( 0), P( 1)				@ 16 
-	.byte	P( 2), P( 3), P( 4), P( 5)		@ 32
-	.byte	P( 6), P( 7), P( 8), P( 9)		@ 64
-	.byte	P(10), P(11), P(12), P(13)		@ 96
-	.byte	P(14), P(15), P(16), P(17)		@128
-	.byte	P(18), P(19), P(20), P(21)		@160
-	.byte	P(22), P(23), P(24), P(25)		@192
-	.byte	158, 159, 160, 160, 160, 160, 160, 160	@224
-	.byte	160, 160, 160, 160, 160, 160, 160, 160	@232
-	.byte	160, 160, 160, 160, 160, 160, 160, 160	@240
-	.byte	160, 160, 160, 160, 160, 160, 160, 160	@248
-
-#undef P
-
-	ALIGN
-
 
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -756,9 +729,9 @@ skip_table:
 @@@ 
 @@@ スプライトDMA
 @@@ 
-write_4014:
+	.globl	spr_dma
+spr_dma:	
 	stmfd	sp!, {r4, r5, lr}	
-	bl	spr_dma_adr
 	@@ r0 = DMA src
 	sub	REG_CYCLE, REG_CYCLE, #512
 	sub	REG_CYCLE, REG_CYCLE, #2
@@ -1194,6 +1167,10 @@ set_vram_bank_0to7:
 	str	r0, tile_map + 4 * 7
 	mov	pc, lr
 
+	.globl	get_tile_map
+get_tile_map:	
+	adr	r0, tile_map
+	mov	pc, lr
 
 @@@ 
 @@@ タイルを64個変換する
@@ -1418,7 +1395,7 @@ map_table_map:
 	ALIGN
 
 @@@ 
-@@@ $2007経由でマップを読む
+@@@ $2007経由でマップまたは属性を読む
 @@@ 
 @@@ r1	=> アドレス(000-3C0)
 @@@ r2	=> マップ番号(0-3)
@@ -1438,14 +1415,18 @@ read_map:
 @@@ r1	=> アドレス(000-3C0)
 @@@ r2	=> マップ番号(0-3)
 write_map:	
+	@@ 属性テーブルに書こうとしている？
+	cmp	r1, #0x3C0
 	adr	r3, map_table_map
 	ldr	r3, [r3, r2, lsl #2]
-	add	r1, r3, r1, lsl #1
+	add	r3, r3, r1, lsl #1
 	@@ ロードできるかな？
-	ldrb	r2, [r1, #1]
+	ldrb	r2, [r3, #1]
 	orr	r2, r0, r2, lsl #8
-	strh	r2, [r1]
-	mov	pc, lr
+	strh	r2, [r3]
+	movcc	pc, lr
+	sub	r3, r3, r1, lsl #1
+	b	write_attr
 
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -1472,6 +1453,7 @@ write_map:
 @@@ 別に保存しておかなければならない
 @@@ 
 
+#if 0
 @@@ 
 @@@ $2007経由で属性を読む
 @@@ 
@@ -1486,7 +1468,7 @@ read_attr:
 	ldrb	r0, [r0, r1]
 	swpb	r0, r0, [r3]
 	mov	pc, lr
-
+#endif
 
 @@@ 
 @@@ $2007経由で属性を書く
@@ -1496,14 +1478,16 @@ read_attr:
 @@@ r2	=> マップ番号(0-3)
 write_attr:	
 	stmfd	sp!, {r4, lr}
+
 	and	r1, r1, #0x3F
+#if 0
 	adr	r3, attr_map
 	ldr	r3, [r3, r2, lsl #2]
 	strb	r0, [r3, r1]
 	
 	adr	r3, map_table_map
 	ldr	r3, [r3, r2, lsl #2]
-
+#endif
 	adr	r2, attr_index_map
 	ldr	r2, [r2, r1, lsl #2]
 
@@ -1637,46 +1621,6 @@ ppu_end_vbl:
 	bic	REG_P_REST, REG_P_REST, #(P_REST_IN_VBL | P_REST_SPR_HIT)
 	mov	pc, lr
 
-
-	.globl	read_high_reg
-read_high_reg:	
-	bic	r1, REG_ADDR, #0x4000
-	teq	r1, #0x15;	beq	read_4015
-	teq	r1, #0x16;	beq	read_4016
-	teq	r1, #0x17;	beq	read_4017
-	mov	pc, lr
-
-	.globl	write_high_reg
-write_high_reg:	
-	bic	r1, REG_ADDR, #0x4000
-	teq	r1, #0x00;	beq	write_4000
-	teq	r1, #0x01;	beq	write_4001
-	teq	r1, #0x02;	beq	write_4002
-	teq	r1, #0x03;	beq	write_4003
-	teq	r1, #0x04;	beq	write_4004
-	teq	r1, #0x05;	beq	write_4005
-	teq	r1, #0x06;	beq	write_4006
-	teq	r1, #0x07;	beq	write_4007
-	teq	r1, #0x08;	beq	write_4008
-	teq	r1, #0x09;	beq	write_4009
-	teq	r1, #0x0A;	beq	write_400A
-	teq	r1, #0x0B;	beq	write_400B
-	teq	r1, #0x14;	beq	write_4014
-	teq	r1, #0x15;	beq	write_4015
-	teq	r1, #0x16;	beq	write_4016
-	teq	r1, #0x17;	beq	write_4017
-	mov	pc, lr
-
-write_4017:	
-	mov	pc, lr
-#if 0
-	mov	r1, r0
-	adr	r0, 1f
-	b	emu_printf
-
-1:	.string "write 4017 %x\n"
-	ALIGN
-#endif
 
 	.globl	read_save_ram
 	.globl	write_save_ram

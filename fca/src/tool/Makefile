@@ -1,7 +1,7 @@
 
 CC = gcc
 
-all: addfile endfile
+all: addfile endfile nes-dasm
 
 addfile: addfile.c
 	$(CC) -o $@ $< -I../include

@@ -191,6 +191,7 @@ timer0_handler:
 	mvn	r0, #67
 	@mov	r0, #0
 	strh	r0, [r1]
+#if 1
 
 do_ch1:	
 	adr	r0, ch1_reg
@@ -214,10 +215,74 @@ do_ch2:
 	str	r2, [r0, #GBA_SG21]
 #endif
 do_ch3:	
+#endif
 	ldmfd	sp!, {r4, r5, pc}
 
 	.pool
 
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ DMC割り込みをチェックする
+@@@ 
+@@@ このコードはCPUがREG_CYCLEだけ実行する直前に呼ばれる
+@@@ REG_CYCLEだけDMCの処理を行ったふりをして，割り込みが
+@@@ 発生するとフラグを立てるが，これは直後のCPUの実行で
+@@@ 拾うべきではない。
+@@@ 
+#define DMC_REG			0x00
+#define DMC_ENB			0x04
+#define DMC_FREQ_COUNTER	0x08
+#define DMC_FREQ_LOAD		0x0C
+#define DMC_DMA_COUNTER		0x10
+#define DMC_DMA_LOAD		0x14
+
+#define DMC_REG_SZ		0x18
+#define DMC_REG_LOOP		0x40
+#define DMC_REG_IRQ		0x80
+
+	.globl	sync_dmc
+
+sync_dmc:	
+#if 0
+#if 0
+	ldr	r0, ch5_reg + DMC_ENB
+	teq	r0, #0
+	moveq	pc, lr
+#endif	
+	ldr	r3, ch5_reg + DMC_REG
+	ldr	r1, ch5_reg + DMC_FREQ_COUNTER
+	sub	r1, r1, REG_CYCLE
+
+1:	
+	cmp	r1, #0
+	strpl	r1, ch5_reg + DMC_FREQ_COUNTER
+	movpl	pc, lr
+
+	ldr	r2, ch5_reg + DMC_FREQ_LOAD
+	add	r1, r1, r2, lsl #3
+
+	ldr	r2, ch5_reg + DMC_DMA_COUNTER
+	teq	r2, #0
+	beq	1b
+
+	subs	r2, r2, #1
+	strne	r2, ch5_reg + DMC_DMA_COUNTER
+	bne	1b
+
+	tst	r3, #DMC_REG_LOOP
+	ldrne	r2, ch5_reg + DMC_DMA_LOAD
+	bicne	REG_P_REST, REG_P_REST, #P_REST_DMC_IRQ
+	str	r2, ch5_reg + DMC_DMA_COUNTER
+	bne	1b
+
+	str	r2, ch5_reg + DMC_ENB
+	tst	r3, #DMC_REG_IRQ
+	orrne	REG_P_REST, REG_P_REST, #P_REST_DMC_IRQ
+	b	1b
+#else
+	mov	pc, lr
+#endif
 
 length_table:	
 	.byte	5, 127, 10,  1, 19,  2, 40,  3
@@ -230,11 +295,19 @@ length_table:
 freq_limit_table:	
 	.long   0x3FF, 0x555, 0x666, 0x71C, 0x787, 0x7C1, 0x7E0, 0x7F0
 
+	ALIGN
+dmc_clocks:	
+	.long	428, 380, 340, 320, 286, 254, 226, 214
+	.long	190, 160, 142, 128, 106,  85,  72,  54
+
+	ALIGN
 	.globl	ch1_reg
 	.globl	ch2_reg
+	.globl	ch5_reg
 ch1_reg:	.fill	SQ_REG_SZ, 1, 0
 ch2_reg:	.fill	SQ_REG_SZ, 1, 0
 
+ch5_reg:	.fill	DMC_REG_SZ, 1, 0
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -376,6 +449,7 @@ write_400A:
 	.globl	write_400B
 write_400B:	
 	strb	r0, ch3_regs + 3
+#if 0
 	mov	r1, #0x04000000
 
 	ldr	r0, =0x20000080
@@ -387,6 +461,7 @@ write_400B:
 	ldr	r0, =1964
 	orr	r0, r0, #0x8000
 	@str	r0, [r1, #0x74]
+#endif
 	mov	pc, lr
 
 
@@ -411,6 +486,43 @@ write_400E:
 	.globl	write_400F
 write_400F:	
 	mov	pc, lr
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@ 
+@@@ CH5
+@@@ 
+
+	.globl	write_4010
+write_4010:	
+	strb	r0, ch5_reg + DMC_REG
+	adr	r1, dmc_clocks
+	and	r2, r0, #0xF
+	ldr	r1, [r1, r2, lsl #2]
+	str	r1, ch5_reg + DMC_FREQ_COUNTER
+	str	r1, ch5_reg + DMC_FREQ_LOAD
+	tst	r0, #0x80
+	biceq	REG_P_REST, REG_P_REST, #P_REST_DMC_IRQ
+	mov	pc, lr
+
+	.globl	write_4011
+write_4011:	
+	strb	r0, ch5_reg + DMC_REG + 1
+	mov	pc, lr
+
+	.globl	write_4012
+write_4012:	
+	strb	r0, ch5_reg + DMC_REG + 2
+	mov	pc, lr
+
+	.globl	write_4013
+write_4013:	
+	strb	r0, ch5_reg + DMC_REG + 3
+	mov	r1, r0, lsl #4
+	add	r1, r1, #1
+	str	r1, ch5_reg + DMC_DMA_LOAD
+	mov	pc, lr
+
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -442,33 +554,32 @@ write_400F:
 
 	.globl	write_4015
 write_4015:
-	mov	r2, #GBA_REG_BASE
-	mov	r3, #0
-	ands	r1, r0, #1
-	streq	r3, [r2, #GBA_SG10]
+	bic	REG_P_REST, REG_P_REST, #P_REST_DMC_IRQ
+	and	r1, r0, #0x01
 	str	r1, ch1_reg + SQ_ENB
-	ands	r1, r0, #2
-	streq	r3, [r2, #GBA_SG11]
+	and	r1, r0, #0x02
 	str	r1, ch2_reg + SQ_ENB
+
+#if 1
+	mov	r2, #0
+	ands	r1, r0, #0x10
+	str	r1, ch5_reg + DMC_ENB
+	streq	r2, ch5_reg + DMC_DMA_COUNTER
+	moveq	pc, lr
+
+	ldr	r1, ch5_reg + DMC_DMA_COUNTER
+	teq	r1, #0
+	ldreq	r1, ch5_reg + DMC_DMA_LOAD
+	streq	r1, ch5_reg + DMC_DMA_COUNTER
+#endif
 #if 0
 	mov	r1, r0
 	adr	r0, 1f
 	b	emu_printf
-1:	.string "write 4015 %x\n"
+#endif
+	mov	pc, lr
+1:	.string	"4015 %x\n"
 	ALIGN
-#endif
-	mov	pc, lr
-
-#if 0
-	tst	r0, #0x0F
-	movne	r0, #0x80
-	moveq	r0, #0x00
-	mov	r1, #0x04000000
-	strb	r0, [r1, #0x84]
-	@mov	r0, #2
-	@strh	r0, [r1, #0x82]
-	mov	pc, lr
-#endif
 
 	.globl	read_4015
 read_4015:	
@@ -477,7 +588,15 @@ read_4015:
 	teq	r1, #0;		orrne	r0, r0, #1
 	ldr	r1, ch2_reg + SQ_ENB
 	teq	r1, #0;		orrne	r0, r0, #2
+	tst	REG_P_REST, #P_REST_DMC_IRQ
+	orrne	r0, r0, #0x80
+	ldr	r1, =reg_4017
+	ldr	r1, [r1]
+	tst	r1, #0xC0
+	orreq	r0, r0, #0x40
 	mov	pc, lr
+
+	.pool
 
 triangle:	
 	.long	0x67452301
@@ -539,7 +658,9 @@ init_apu:
 	strh	r0, [r1, r2]
 	bne	1b
 
-	mov	pc, lr
+	mov	r0, #0
+	b	write_4010
+	@mov	pc, lr
 
 	.pool
 
@@ -547,3 +668,30 @@ init_apu:
 
 freq_table:	
 	.fill	0x800, 2, 0
+
+	SECTION_FAST
+	ALIGN
+
+
+	.globl	read_high_reg
+read_high_reg:	
+	bic	r1, REG_ADDR, #0x4000
+	teq	r1, #0x15;	beq	read_4015
+	teq	r1, #0x16;	beq	read_4016
+	teq	r1, #0x17;	beq	read_4017
+	mov	r0, #0x40
+	mov	pc, lr
+
+	.globl	write_high_reg
+write_high_reg:	
+	bic	r1, REG_ADDR, #0x4000
+	cmp	r1, #0x18
+	ldrcc	pc, [pc, r1, lsl #2]
+	mov	pc, lr
+	.long	write_4000, write_4001, write_4002, write_4003
+	.long	write_4004, write_4005, write_4006, write_4007
+	.long	write_4008, write_4009, write_400A, write_400B
+	.long	write_400C, write_400D, write_400E, write_400F
+	.long	write_4010, write_4011, write_4012, write_4013
+	.long	write_4014, write_4015, write_4016, write_4017
+

@@ -151,11 +151,12 @@ int_handler:
 	ldr	r1, [r0, #GBA_IE]
 	str	r1, [r0, #GBA_IE]
 
+	ldr	r2, [r0, #GBA_KEY]
+	tst	r2, #GBA_KEY_R | GBA_KEY_L
+	beq	emu_panic_from_int
+
 	mov	r1, r1, lsr #16
 	stmfd	sp!, {r1, lr}
-
-	mov	r2, #1
-	str	r2, [r0, #GBA_IME]
 
 	tst	r1, #GBA_IRQ_VBL
 	ldrne	r0, vbl_count
@@ -170,6 +171,11 @@ int_handler:
 	strne	r0, timer_count
 	blne	timer0_handler
 #endif
+
+	mov	r0, #GBA_REG_BASE
+	mov	r2, #1
+	str	r2, [r0, #GBA_IME]
+
 	ldmfd	sp!, {r1, pc}
 
 timer_count:	.long	0
@@ -210,13 +216,18 @@ install_hsync_handler:
 .endm
 
 
+.macro	DMC_IRQ
+	tst	REG_P_REST, #P_REST_DMC_IRQ
+	orrne	REG_P_REST, REG_P_REST, #P_REST_INT_PENDING
+.endm
+
 @@@ 
 @@@ 現在のライン番号[0..262]
 @@@ 
 
 current_line:	.long	0
 
-999:	.string "SL %x, E %x, R %x\n"
+999:	.string "ch5 %x\n"
 	ALIGN
 
 @@@ 
@@ -241,10 +252,8 @@ emulate_frame:
 	beq	emu_panic
 
 #if 1
-	ldr	r1, = ch1_reg
-	ldr	r3, [r1, #0x00]
-	ldr	r2, [r1, #0x04]
-	ldr	r1, [r1, #0x2C]
+	ldr	r1, = ch5_reg
+	ldr	r1, [r1, #0x00]
 #if 0
 	ldr	r2, = ch2_reg
 	ldr	r2, [r2]
@@ -277,7 +286,8 @@ emulate_frame:
 	@@ 0-239
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
-	
+	DMC_IRQ	
+
 	ldr	r0, current_line
 	HSYNC
 
@@ -297,19 +307,26 @@ emulate_frame:
 	cmp	r0, #240
 	bcc	1b
 
+	ldr	r0, reg_4017
+	tst	r0, #0xC0
+	orreq	REG_P_REST, REG_P_REST, #P_REST_INT_PENDING
+
 	@@ 240
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
+	DMC_IRQ	
 	mov	r0, #240
 	HSYNC
 	@@ 241
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
+	DMC_IRQ	
 	mov	r0, #241
 	HSYNC
 	@@ 242
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
+	DMC_IRQ	
 	mov	r0, #242
 	HSYNC
 
@@ -317,10 +334,12 @@ emulate_frame:
 	bl	ppu_start_vbl
 	add	REG_CYCLE, REG_CYCLE, #1
 	bl	cpu_exec
+	DMC_IRQ	
 	tst	REG_P_REST, #P_REST_ENB_NMI
 	orrne	REG_P_REST, REG_P_REST, #P_REST_NMI_PENDING
 	add	REG_CYCLE, REG_CYCLE, #112
 	bl	cpu_exec
+	DMC_IRQ	
 	mov	r0, #243
 	HSYNC
 
@@ -330,6 +349,7 @@ emulate_frame:
 1:	
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
+	DMC_IRQ	
 
 	ldr	r0, current_line
 	HSYNC
@@ -346,6 +366,7 @@ emulate_frame:
 	bl	ppu_end_vbl
 	add	REG_CYCLE, REG_CYCLE, #113
 	bl	cpu_exec
+	DMC_IRQ	
 	mov	r0, #6
 	add	r0, r0, #256
 	HSYNC
@@ -353,8 +374,22 @@ emulate_frame:
 	@@ 262.5
 	add	REG_CYCLE, REG_CYCLE, #56
 	bl	cpu_exec
+	DMC_IRQ	
 
 	b	emulate_frame
 
-
 	.pool
+
+	.globl	reg_4017
+reg_4017:	.long	0xFF
+
+	.globl	write_4017
+write_4017:	
+	str	r0, reg_4017
+	tst	r0, #0xF0
+	movne	pc, lr
+	adr	r0, 1f
+	b	emu_printf
+	mov	pc, lr
+1:	.string	"4017\n"
+	ALIGN

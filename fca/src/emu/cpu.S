@@ -1592,8 +1592,18 @@ op6C:
 	teq	r0, #0xFF
 	beq	jmp_indirect_bug
 	READ_WORD
+#if 0
+	mov	REG_ADDR, r0
+	mov	r1, r0
+	adr	r0, 1f
+	bl	emu_printf
+	mov	r0, REG_ADDR
+#endif
 	LOAD_PC
 	CYCLE_NEXT	5
+
+1:	.string	"jmp %x\n"
+	ALIGN
 
 jmp_indirect_bug:
 	mov	r0, #0x6C
@@ -1670,6 +1680,7 @@ memory_map:
 @@@ ---- 11
 op00:	@ BRK
 	IMPLIED
+	add	REG_PC, REG_PC, #1
 	ldr	r0, pc_bank
 	sub	r0, REG_PC, r0
 	PUSH_WORD
@@ -1838,17 +1849,16 @@ install_rom_write_handler:
 	mov	pc, lr
 
 @@@ 
-@@@ スプライトのDMAのアドレスを変換する
+@@@ スプライトDMA
 @@@ 
-	.globl	spr_dma_adr
-
-spr_dma_adr:	
+	.globl	write_4014
+write_4014:	
 	movs	r1, r0, lsr #5
 	biceq	r0, r0, #0x18
 	ldr	r2, =memory_map
 	ldr	r2, [r2, r1, lsl #2]
 	add	r0, r2, r0, lsl #8
-	mov	pc, lr
+	b	spr_dma
 
 	.pool
 
@@ -1882,6 +1892,13 @@ cpu_exec:
 	cmp	REG_CYCLE, #0
 	movle	pc, lr
 	stmfd	sp!, {lr}
+
+@@@ 
+@@@	ここでDMCのチェックを行う
+@@@	DMC割り込みが起きるとREG_P_RESTにフラグを立てるが
+@@@	それはこのサイクルを実行後にINTフラグに送られる
+@@@ 
+	bl	sync_dmc
 
 	adr	REG_OP_TABLE, cpu_exec_table
 
@@ -2114,4 +2131,27 @@ emu_panic:
 	mov	r3, REG_PC
 	ldr	pc, =panic
 1:	b	1b
+	.pool
+
+	.globl	emu_panic_from_int
+emu_panic_from_int:	
+	ldmfd	sp!, {r0-r3, r12, lr}
+	str	lr, orig_pc
+#if 0
+	adr	lr, 1f
+	subs	pc, lr, #0
+1:	nop
+	nop
+#endif
+	str	r0, orig_r0
+	mov	r0, #0x03000000
+	stmia	r0, {r0-r15}
+	ldr	r1, orig_r0
+	str	r1, [r0, #0x40]
+	ldr	r1, orig_pc
+	str	r1, [r0, #0x44]
+	ldr	pc, = panic_from_int
+
+orig_pc:	.long	0
+orig_r0:	.long	0
 	.pool

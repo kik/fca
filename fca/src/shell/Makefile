@@ -30,12 +30,15 @@ depend:
 
 crt0.o: ../include/gba-arm.h
 shell.o: ../include/gba.h ../include/gba-regs.h ../include/file.h
-shell.o: ../include/load.h ../include/window.h ../include/vram.h
-lib.o: ../include/gba.h ../include/lib.h
-file.o: ../include/gba.h ../include/file.h ../include/text.h ../include/lib.h
+shell.o: ../include/load.h ../include/window.h ../include/text.h
+shell.o: ../include/struct.h ../include/lib.h
+lib.o: ../include/gba.h ../include/lib.h ../include/file.h
+file.o: ../include/gba.h ../include/file.h ../include/text.h
+file.o: ../include/window.h ../include/lib.h
 load.o: ../include/gba.h ../include/file.h ../include/text.h
-load.o: ../include/load.h ../include/lib.h
+load.o: ../include/load.h ../include/window.h ../include/struct.h
+load.o: ../include/lib.h
 text.o: ../include/gba.h ../include/gba-regs.h ../include/file.h
-text.o: ../include/vram.h ../include/window.h
-window.o: ../include/gba.h ../include/gba-regs.h ../include/vram.h
-window.o: ../include/window.h ../include/file.h
+text.o: ../include/text.h ../include/window.h
+window.o: ../include/gba.h ../include/gba-regs.h ../include/text.h
+window.o: ../include/window.h ../include/file.h ../include/lib.h

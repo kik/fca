@@ -1,5 +1,5 @@
-#ifndef VRAM_H
-#define VRAM_H
+#ifndef TEXT_H
+#define TEXT_H
 
 #define VRAM_BASE_ADDR  0x06000000
 

@@ -2,6 +2,7 @@
 #include "file.h"
 #include "text.h"
 #include "load.h"
+#include "window.h"
 #include "struct.h"
 #include "lib.h"
 
@@ -20,8 +21,8 @@ verify_nes_file(struct nes_header *p)
     return 0;
   if (p->rom_ctl_2 & 0xF)
     return 0;
-  if (memcmp(p->pad, "\0\0\0\0\0\0\0\0", 8) != 0)
-    return 0;
+  //if (memcmp(p->pad, "\0\0\0\0\0\0\0\0", 8) != 0)
+  //  return 0;
   return 1;
 }
 
@@ -119,8 +120,10 @@ run_emulator(struct nes_header *p,
 	     struct file *save_w, struct file *save_r)
 {
   struct emulator_opt *opt = &emulator_opt;
-  if (!verify_nes_file(p))
+  if (!verify_nes_file(p)) {
+    warn(ERROR "NESファイルヘッダがまちがっています。");
     return 0;
+  }
 
   load_emulator();
   load_mapper(opt->mapper_num = nes_mapper(p));

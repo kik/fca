@@ -4,7 +4,7 @@
 #include "file.h"
 #include "load.h"
 #include "window.h"
-#include "vram.h"
+#include "text.h"
 #include "struct.h"
 #include "lib.h"
 

@@ -3,7 +3,7 @@
 #include "gba.h"
 #include "gba-regs.h"
 
-#include "vram.h"
+#include "text.h"
 #include "window.h"
 #include "file.h"
 #include "lib.h"
@@ -88,6 +88,23 @@ wait_vblank()
 static int
 repeat_counter(int n, int press)
 {
+  static int counter[6];
+  static int counter2[6];
+
+  if (press) {
+    if (counter[n] == 0) {
+      if (counter2[n] < 2)
+	counter[n] = 7;
+      else
+	counter[n] = 3;
+    } else if (--counter[n] == 0) {
+      counter2[n]++;
+      return 1;
+    }
+  } else {
+    counter[n] = 0;
+    counter2[n] = 0;
+  }
   return 0;
 }
 

@@ -2,7 +2,7 @@
 #include "gba.h"
 #include "gba-regs.h"
 #include "file.h"
-#include "vram.h"
+#include "text.h"
 #include "window.h"
 
 static const unsigned char *ch_table_src[] = {
